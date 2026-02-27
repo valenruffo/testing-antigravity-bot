@@ -1,0 +1,20 @@
+# Entornos virtuales
+venv/
+env/
+.env
+
+# Archivos temporales
+.tmp/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Credenciales y configuraciones locales
+.DS_Store
+
+# Credenciales de Google Auth API (¡MUY IMPORTANTE NO SUBIR ESTO!)
+credentials.json
+token.json
+token.pickle
+google_token.json

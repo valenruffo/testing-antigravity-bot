@@ -1,0 +1,10 @@
+# dependencias usadas hasta ahora
+python-dotenv
+langgraph
+langchain
+langchain-openai
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+google-api-python-client
+python-telegram-bot

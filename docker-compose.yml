@@ -3,7 +3,7 @@ version: '3.8'
 services:
   app:
     build: .
-    container_name: ricardo_bot_app
+    container_name: whatsapp_bot_app
     restart: unless-stopped
     env_file:
       - .env
@@ -15,7 +15,7 @@ services:
 
   cloudflared:
     image: cloudflare/cloudflared:latest
-    container_name: ricardo_bot_tunnel
+    container_name: whatsapp_bot_tunnel
     restart: unless-stopped
     env_file:
       - .env

@@ -174,7 +174,7 @@ def agendar_cita(fecha_hora_inicio_iso: str, nombre_cliente: str, correo_cliente
             ],
             'conferenceData': {
                 'createRequest': {
-                    'requestId': f"ricardo_meet_{start_time.strftime('%Y%m%d%H%M%S')}",
+                    'requestId': f"bot_meet_{start_time.strftime('%Y%m%d%H%M%S')}",
                     'conferenceSolutionKey': {'type': 'hangoutsMeet'}
                 }
             }

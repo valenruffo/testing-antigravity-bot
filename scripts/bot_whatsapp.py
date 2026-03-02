@@ -15,10 +15,10 @@ from main import graph
 load_dotenv()
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_ID")
-WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "ricardo_broker_secreto_2026")
+WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "my_secure_webhook_token_2026")
 
 # Inicializar Servidor Web
-app = FastAPI(title="Ricardo Broker - WhatsApp Webhook")
+app = FastAPI(title="WhatsApp Agent Webhook")
 
 # Memoria local volatil (Igual que Telegram)
 # En prod usar SQLiteBase o Checkpointer de LangGraph

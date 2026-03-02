@@ -9,7 +9,7 @@ services:
       - .env
     volumes:
       - ./credentials.json:/app/scripts/credentials.json:ro
-      - ./token.json:/app/scripts/token.json:ro
+      - ./token.json:/app/scripts/token.json
     expose:
       - "8000"
 

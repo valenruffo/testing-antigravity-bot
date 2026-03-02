@@ -36,12 +36,18 @@ def send_whatsapp_message(to_number: str, text: str):
         "Content-Type": "application/json"
     }
     
-    # Buscar si LangGraph intentó enviar una imagen en formato Markdown ![alt](url)
-    match = re.search(r'!\[(.*?)\]\((.*?)\)', text)
+    # Buscar si LangGraph intentó enviar una imagen en formato Markdown o como un simple enlace [alt](url)
+    match = re.search(r'!?\[(.*?)\]\((.*?)\)', text)
     
+    is_image = False
     if match:
-        alt_text = match.group(1)
         image_url = match.group(2)
+        # Verificar si el enlace apunta a un archivo multimedia
+        if "image" in image_url.lower() or any(ext in image_url.lower() for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp', "encrypted-tbn0"]):
+            is_image = True
+            
+    if is_image:
+        alt_text = match.group(1)
         
         # Eliminar el bloque de markdown del texto para que no se vea feo
         texto_limpio = text.replace(match.group(0), "").strip()

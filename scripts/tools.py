@@ -93,6 +93,7 @@ def consultar_propiedades(zona: str = None, presupuesto_maximo: int = None) -> s
             return f"Actualmente no cuento con propiedades en {zona}."
             
     except Exception as e:
+        print(f"\n\n🚨 GOOGLE API ERROR ---> {str(e)}\n\n")
         return f"Error al consultar la base de datos de propiedades: {str(e)}"
 
 def registrar_lead(nombre: str, contacto: str, presupuesto: str, zona: str, urgencia: str) -> str:

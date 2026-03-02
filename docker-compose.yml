@@ -19,8 +19,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    # 🔴 Este token te lo da Cloudflare cuando creas el túnel en su panel web
-    command: tunnel --no-autoupdate run --token $${CLOUDFLARE_TOKEN}
+    # 🔴 Este token de Túnel lo recibes de Cloudflare
+    command: tunnel run
     environment:
       - TUNNEL_TOKEN=$${CLOUDFLARE_TOKEN}
     depends_on:

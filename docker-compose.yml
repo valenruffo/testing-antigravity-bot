@@ -20,7 +20,7 @@ services:
     env_file:
       - .env
     # 🔴 Este token te lo da Cloudflare cuando creas el túnel en su panel web
-    command: tunnel run
+    command: tunnel --no-autoupdate run --token $${CLOUDFLARE_TOKEN}
     environment:
       - TUNNEL_TOKEN=$${CLOUDFLARE_TOKEN}
     depends_on:

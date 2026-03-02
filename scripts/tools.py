@@ -1,5 +1,8 @@
 import os.path
 from datetime import datetime, timedelta
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 
 from google.auth.transport.requests import Request
@@ -304,5 +307,39 @@ def cancelar_cita(correo_cliente: str) -> str:
         return f"La cita futura bajo el correo {correo_cliente} fue cancelada y borrada silenciosamente."
     except Exception as e:
         return f"Error al cancelar la cita: {str(e)}"
+        
+def transferir_a_humano(motivo_transferencia: str) -> str:
+    """Detiene la conversación con la IA y transfiere el caso a un Asesor Humano real.
+       Usa esta herramienta DENTRO DEL GRAFO si el cliente se enoja, se atasca o lo pide explícitamente.
+       Args:
+           motivo_transferencia: Breve resumen para el humano de por qué estás abandonando el chat.
+    """
+    admin_email = os.getenv("ADMIN_EMAIL", "")
+    mail_user = os.getenv("SMTP_USER", "")
+    mail_pass = os.getenv("SMTP_PASS", "")
+    
+    # 1. Intentar notificar al administrador si hay credenciales
+    if admin_email and mail_user and mail_pass:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = mail_user
+            msg['To'] = admin_email
+            msg['Subject'] = "🚨 [BOT] Transferencia a Humano Solicitada"
+            
+            body = f"El bot ha transferido un chat a modo manual.\n\nMotivo que dio la Inteligencia Artificial: {motivo_transferencia}\n\nPor favor, revisa tu WhatsApp Business."
+            msg.attach(MIMEText(body, 'plain'))
+            
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(mail_user, mail_pass)
+            text = msg.as_string()
+            server.sendmail(mail_user, admin_email, text)
+            server.quit()
+        except Exception as e:
+            print(f"Error enviando correo de HITL: {e}")
+            
+    # 2. Retornaremos un payload especial estructurado que `main.py` atrapará para
+    # cambiar el AgentState
+    return f"HITL_TRIGGERED||{motivo_transferencia}"
 
-TOOLS = [consultar_propiedades, registrar_lead, agendar_cita, obtener_horarios_disponibles, reagendar_cita, cancelar_cita]
+TOOLS = [consultar_propiedades, registrar_lead, agendar_cita, obtener_horarios_disponibles, reagendar_cita, cancelar_cita, transferir_a_humano]

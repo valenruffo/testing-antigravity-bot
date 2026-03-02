@@ -93,9 +93,15 @@ def ejecutar_herramientas(state: AgentState):
     result = tool_node.invoke({"messages": [last_message]})
     tool_messages = result.get("messages", [])
     
-    # Agregar al historial existente
-    return {"historial_mensajes": current_messages + tool_messages}
-
+    # Agregar al historial existente y verificar si se detonó el HITL
+    nuevo_estado = {"historial_mensajes": current_messages + tool_messages}
+    
+    # Revisar si alguna herramienta retornó nuestra señal especial de transferencia a humano
+    for tm in tool_messages:
+        if isinstance(tm.content, str) and "HITL_TRIGGERED" in tm.content:
+            nuevo_estado["esperando_humano"] = True
+            
+    return nuevo_estado
 # Añadimos los nodos
 workflow.add_node("agent", razonar_estado)
 workflow.add_node("tools_node", ejecutar_herramientas)

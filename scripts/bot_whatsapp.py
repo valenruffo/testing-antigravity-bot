@@ -134,7 +134,7 @@ async def handle_whatsapp_message(request: Request):
                     # Ignorar status updates (read, delivered, sent)
                     if "messages" in value:
                         message = value["messages"][0]
-                        sender_phone = message.get("from") # El número de télefono del cliente
+                        sender_phone = message.get("from") # Quién envió el mensaje
                         
                         # Parche WhatsApp API (Argentina): Los webhooks traen el "9" (549...) 
                         # pero la API de salida exige enviarlos sin el 9 (5411...).
@@ -143,10 +143,42 @@ async def handle_whatsapp_message(request: Request):
                             
                         msg_type = message.get("type")
                         
-                        # Solo procesamos texto
+                        # --- SHADOW COMMANDS (Reactivación por el Administrador) ---
+                        # Meta permite Message Echoes (mensajes enviados por la propia empresa desde el celular).
+                        is_echo = False
+                        if "context" in message and message["context"].get("from") == WHATSAPP_PHONE_ID:
+                            is_echo = True
+                            
+                        if sender_phone == WHATSAPP_PHONE_ID or is_echo:
+                            if msg_type == "text":
+                                texto_sombra = message.get("text", {}).get("body", "").strip()
+                                
+                                # Inferir a quién le escribimos
+                                destino = message.get("to")
+                                if destino and destino.startswith("549") and len(destino) == 13:
+                                    destino = "54" + destino[3:]
+                                    
+                                if destino and texto_sombra == "/bot_resume":
+                                    estado_usuario = MEMORY_STORAGE.get(destino, {})
+                                    if estado_usuario and estado_usuario.get("esperando_humano"):
+                                        estado_usuario["esperando_humano"] = False
+                                        print(f"✅ [HITL] Agente RESUCITADO manualmente para el cliente {destino}.")
+                                        send_whatsapp_message(destino, "Hola de nuevo. El administrador ha finalizado su sesión. Sigo a tu entera disposición.")
+                                        
+                            # Es un Echo nuestro, cortamos acá para no auto-respondernos
+                            return {"status": "ok"}
+                        # --- FIN SHADOW COMMANDS ---
+                            
+                        # Solo procesamos texto entrante de los clientes reales
                         if msg_type == "text":
                             user_text = message.get("text", {}).get("body", "")
                             
+                            # HITL Check: Si el usuario está en modo Manual, bloqueamos a LangGraph
+                            estado_usuario = MEMORY_STORAGE.get(sender_phone, {})
+                            if estado_usuario.get("esperando_humano", False) == True:
+                                print(f"🛑 [HITL] Mensaje de {sender_phone} ignorado. El chat está en modo manual o transferido.")
+                                return {"status": "ok"}
+                                
                             # Pasar la carga al motor de LangGraph asíncronamente para no bloquear el webhook que Meta espera en < 3 segs
                             asyncio.create_task(procesar_langgraph(sender_phone, user_text))
                             
@@ -166,7 +198,8 @@ async def procesar_langgraph(sender_phone: str, user_text: str):
             "historial_mensajes": [],
             "datos_recolectados": {},
             "fase_venta": "Nueva",
-            "buffer_mensajes": []
+            "buffer_mensajes": [],
+            "esperando_humano": False
         }
         # El LLM de LangGraph será el único encargado de enviar el saludo inicial basándose en el prompt.
         

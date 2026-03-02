@@ -87,6 +87,12 @@ async def handle_whatsapp_message(request: Request):
                     if "messages" in value:
                         message = value["messages"][0]
                         sender_phone = message.get("from") # El número de télefono del cliente
+                        
+                        # Parche WhatsApp API (Argentina): Los webhooks traen el "9" (549...) 
+                        # pero la API de salida exige enviarlos sin el 9 (5411...).
+                        if sender_phone.startswith("549") and len(sender_phone) == 13:
+                            sender_phone = "54" + sender_phone[3:]
+                            
                         msg_type = message.get("type")
                         
                         # Solo procesamos texto

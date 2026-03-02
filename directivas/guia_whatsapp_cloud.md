@@ -40,4 +40,13 @@ ngrok http 8000
 ```
 Te dará un enlace como `https://<url-rara>.ngrok.io`. 
 
-Copia ese enlace, vuelve a **Meta Developers** -> **Configuración -> Webhooks**. Pega tu URL de Ngrok añadiéndole `/webhook` al final, y pega la misma contraseña secreta de `WHATSAPP_VERIFY_TOKEN` que inventaste. Meta verificará que tu servidor FastAPI está vivo.
+Copia ese enlace, vuelve a **Meta Developers** -> **Configuración -> Webhooks**. Pega tu URL de Ngrok/Cloudflare añadiéndole `/webhook` al final, y pega la misma contraseña secreta de `WHATSAPP_VERIFY_TOKEN` que inventaste. Meta verificará que tu servidor FastAPI está vivo.
+
+## 6. Suscripciones de Webhook (IMPORTANTE PARA HITL)
+Para que el bot pueda recibir mensajes, y además sepa cuándo el dueño del negocio mandó un mensaje manualmente (para reactivar a la IA con `/bot_resume`), necesitas suscribirte a los eventos en esa misma pantalla de Webhooks de Meta:
+
+1. Busca el botón "Administrar" o "Manage" al lado de Webhook Fields.
+2. Tilda **`messages`** (para recibir textos del cliente).
+3. Tilda **`message_echoes`** (para recibir tus propios textos y comandos sombra).
+
+**⚠️ Bug Frecuente de Meta:** Si la interfaz no te deja tildar "message_echoes" o arroja error, no te preocupes. Dale a **"Desuscribirse" (Unsubscribe)** para borrar la conexión actual, y vuelve a suscribir exactamente la misma URL y el mismo Token. Eso refresca la Caché de Meta y te permitirá tildar ambas casillas sin problema. No rompe absolutamente nada del bot actual.

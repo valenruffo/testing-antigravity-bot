@@ -2,6 +2,7 @@ import os
 import asyncio
 import random
 import requests
+import re
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, Request, HTTPException, Query
@@ -35,7 +36,48 @@ def send_whatsapp_message(to_number: str, text: str):
         "Content-Type": "application/json"
     }
     
-    # Adaptar estilo de Markdown: LLM da **bold**, WA necesita *bold*
+    # Buscar si LangGraph intentó enviar una imagen en formato Markdown ![alt](url)
+    match = re.search(r'!\[(.*?)\]\((.*?)\)', text)
+    
+    if match:
+        alt_text = match.group(1)
+        image_url = match.group(2)
+        
+        # Eliminar el bloque de markdown del texto para que no se vea feo
+        texto_limpio = text.replace(match.group(0), "").strip()
+        texto_formateado = texto_limpio.replace('**', '*')
+        
+        # WhatsApp tiene un límite estricto de 1024 caracteres para los captions (pie de foto) de imágenes.
+        if len(texto_formateado) > 1000:
+            # Mandamos la imagen sola y después el texto aparte
+            image_data = {
+                "messaging_product": "whatsapp",
+                "to": to_number,
+                "type": "image",
+                "image": {"link": image_url}
+            }
+            requests.post(url, headers=headers, json=image_data)
+            
+            # Recursivo para mandar el resto del texto como mensaje normal
+            texto_formateado = texto_formateado[:4096] # Limite de texto normal
+            return send_whatsapp_message(to_number, texto_formateado)
+        else:
+            # Mandamos la imagen con el texto como caption
+            image_data = {
+                "messaging_product": "whatsapp",
+                "to": to_number,
+                "type": "image",
+                "image": {
+                    "link": image_url,
+                    "caption": texto_formateado
+                }
+            }
+            response = requests.post(url, headers=headers, json=image_data)
+            if response.status_code != 200:
+                print(f"Error enviando imagen WhatsApp: {response.text}")
+            return response
+
+    # 2. FLUJO NORMAL: No hay imagen, se envía como texto puro
     text_formateado = text.replace('**', '*')
     
     data = {

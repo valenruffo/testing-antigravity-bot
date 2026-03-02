@@ -17,6 +17,8 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: ricardo_bot_tunnel
     restart: unless-stopped
+    env_file:
+      - .env
     # 🔴 Este token te lo da Cloudflare cuando creas el túnel en su panel web
     command: tunnel run
     environment:

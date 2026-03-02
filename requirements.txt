@@ -8,3 +8,6 @@ google-auth-oauthlib
 google-auth-httplib2
 google-api-python-client
 python-telegram-bot
+
+
+uvicorn==0.34.0

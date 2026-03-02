@@ -175,6 +175,15 @@ async def handle_whatsapp_message(request: Request):
                             
                             # HITL Check: Si el usuario está en modo Manual, bloqueamos a LangGraph
                             estado_usuario = MEMORY_STORAGE.get(sender_phone, {})
+                            
+                            # PARCHE DE PRUEBAS: Permitimos que el propio cliente despierte al bot si manda el comando
+                            # Esto es útil dado que las Cuentas de Prueba de Meta no soportan message_echoes
+                            if user_text.strip() == "/bot_resume" and estado_usuario.get("esperando_humano", False):
+                                estado_usuario["esperando_humano"] = False
+                                print(f"✅ [HITL] Agente RESUCITADO desde el lado del cliente (Modo Prueba) {sender_phone}.")
+                                send_whatsapp_message(sender_phone, "Hola de nuevo. El administrador ha devuelto el control. Sigo a tu entera disposición.")
+                                return {"status": "ok"}
+                                
                             if estado_usuario.get("esperando_humano", False) == True:
                                 print(f"🛑 [HITL] Mensaje de {sender_phone} ignorado. El chat está en modo manual o transferido.")
                                 return {"status": "ok"}

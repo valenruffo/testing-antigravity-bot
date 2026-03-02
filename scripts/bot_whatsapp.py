@@ -120,8 +120,7 @@ async def procesar_langgraph(sender_phone: str, user_text: str):
             "fase_venta": "Nueva",
             "buffer_mensajes": []
         }
-        # Mensaje de bienvenida inicial opcional
-        send_whatsapp_message(sender_phone, "Hola, soy Ricardo. ¿En qué te puedo ayudar hoy?")
+        # El LLM de LangGraph será el único encargado de enviar el saludo inicial basándose en el prompt.
         
     estado_actual = MEMORY_STORAGE[sender_phone]
     

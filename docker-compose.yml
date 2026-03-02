@@ -22,6 +22,6 @@ services:
     # 🔴 Este token de Túnel lo recibes de Cloudflare
     command: tunnel run
     environment:
-      - TUNNEL_TOKEN=$${CLOUDFLARE_TOKEN}
+      - TUNNEL_TOKEN=${CLOUDFLARE_TOKEN}
     depends_on:
       - app

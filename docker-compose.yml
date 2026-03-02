@@ -8,31 +8,18 @@ services:
     env_file:
       - .env
     volumes:
-      # Montamos los tokens de Google como solo lectura
       - ./credentials.json:/app/credentials.json:ro
       - ./token.json:/app/token.json:ro
     expose:
       - "8000"
 
-  nginx:
-    image: nginx:alpine
-    container_name: ricardo_bot_nginx
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: ricardo_bot_tunnel
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
+    # 🔴 Este token te lo da Cloudflare cuando creas el túnel en su panel web
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=$${CLOUDFLARE_TOKEN}
     depends_on:
       - app
-
-  certbot:
-    image: certbot/certbot
-    container_name: ricardo_bot_certbot
-    volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    # El comando se ejecutará cada 12 horas para renovar el certificado
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"

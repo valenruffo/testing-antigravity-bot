@@ -48,17 +48,24 @@ def razonar_estado(state: AgentState, config: RunnableConfig):
         fecha_actual_str += f"- {nombre_dia_futuro} {dia_futuro.day} de {nombre_mes_futuro}\n"
         
     fecha_actual_str += "\nTen esto en cuenta obligatoriamente para calcular fechas si el usuario dice 'mañana', 'el miércoles', 'próxima semana', etc."
-    # OBTENER MEMORIA SEMÁNTICA DE ZEP (SI EXISTE)
+    # OBTENER MEMORIA SEMÁNTICA DE ZEP (VÍA HTTP)
     thread_id = config.get("configurable", {}).get("thread_id", "default")
     zep_context = ""
-    if 'zep_client' in globals() and zep_client:
-        try:
-            # Recuperar memoria de Zep (resumen y hechos)
-            zep_mem = zep_client.memory.get_memory(thread_id)
-            if zep_mem and zep_mem.summary:
-                zep_context = f"\n\n# MEMORIA A LARGO PLAZO DEL LEAD:\n{zep_mem.summary.content}\nUtiliza este contexto histórico si es relevante para la conversación actual."
-        except Exception:
-            pass # Si la sesión no existe en Zep aún, ignoramos
+    try:
+        from main import ZEP_URL, ZEP_API_KEY
+        import requests
+        
+        headers = {}
+        if ZEP_API_KEY:
+            headers["Authorization"] = f"Api-Key {ZEP_API_KEY}"
+            
+        resp = requests.get(f"{ZEP_URL}/api/v1/sessions/{thread_id}/memory", headers=headers, timeout=3.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data and data.get("summary") and data["summary"].get("content"):
+                zep_context = f"\n\n# MEMORIA A LARGO PLAZO DEL LEAD:\n{data['summary']['content']}\nUtiliza este contexto histórico si es relevante para la conversación actual."
+    except Exception as e:
+        print(f"Zep fetch summary dict fail: {e}")
 
     system_prompt_dinamico = SYSTEM_PROMPT + fecha_actual_str + zep_context
     
@@ -153,7 +160,7 @@ checkpointer = MemorySaver()
 
 try:
     # Intentamos conectar a PostgreSQL para memoria persistente
-    pool = ConnectionPool(conninfo=DB_URI, max_size=10, timeout=5.0)
+    pool = ConnectionPool(conninfo=DB_URI, max_size=10, timeout=5.0, kwargs={"autocommit": True})
     checkpointer_pg = PostgresSaver(pool)
     checkpointer_pg.setup()
     checkpointer = checkpointer_pg
@@ -163,16 +170,6 @@ except Exception as e:
 
 graph = workflow.compile(checkpointer=checkpointer)
 
-# --- ZEP CLIENT SETUP ---
-from zep_python import ZepClient
-from zep_python.exceptions import NotFoundError
-
+# --- ZEP CONFIG ---
 ZEP_URL = os.getenv("ZEP_URL", "http://zep_server:8000")
 ZEP_API_KEY = os.getenv("ZEP_API_KEY", "")
-
-try:
-    zep_client = ZepClient(base_url=ZEP_URL, api_key=ZEP_API_KEY)
-    print(f"✅ Zep Client inicializado en {ZEP_URL}")
-except Exception as e:
-    zep_client = None
-    print(f"⚠️ Zep Client falló al inicializar: {e}")

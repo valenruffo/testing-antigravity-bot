@@ -168,18 +168,21 @@ async def procesar_langgraph(thread_id: str, user_text: str):
     bot_responses = [msg for msg in buffer if msg.strip()]
     
     # 2. Guardar en Zep para memoria semántica y summarization de largo plazo
-    if zep_client:
-        try:
-            from zep_python.models import Memory, Message as ZepMessage
+    try:
+        from main import ZEP_URL, ZEP_API_KEY
+        import requests
+        
+        messages_payload = [{"role": "user", "role_type": "user", "content": user_text}]
+        for br in bot_responses:
+           messages_payload.append({"role": "ai", "role_type": "assistant", "content": br})
+           
+        headers = {}
+        if ZEP_API_KEY:
+            headers["Authorization"] = f"Api-Key {ZEP_API_KEY}"
             
-            zep_messages = [ZepMessage(role="user", content=user_text)]
-            for br in bot_responses:
-               zep_messages.append(ZepMessage(role="ai", content=br))
-               
-            zep_memory = Memory(messages=zep_messages)
-            zep_client.memory.add_memory(thread_id, zep_memory)
-        except Exception as e:
-            print(f"Error mandando datos a Zep: {e}")
+        requests.post(f"{ZEP_URL}/api/v1/sessions/{thread_id}/memory", json={"messages": messages_payload}, headers=headers, timeout=3.0)
+    except Exception as e:
+        print(f"Error mandando datos a Zep (HTTP): {e}")
     
     # 3. Leer buffer y enviar a Chatwoot secuencialmente
     buffer = nuevo_estado.get("buffer_mensajes", [])

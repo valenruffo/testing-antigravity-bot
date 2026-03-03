@@ -86,7 +86,34 @@ services:
     volumes:
       - redis_data:/data
 
+  # --- BOT PERSISTENCE (ZEP + POSTGRES) ---
+  bot_postgres:
+    image: postgres:16
+    container_name: bot_postgres
+    restart: always
+    environment:
+      - POSTGRES_DB=bot_memory
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - bot_pg_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+  zep_server:
+    image: getzep/zep:latest
+    container_name: zep_server
+    restart: always
+    depends_on:
+      - bot_postgres
+    environment:
+      - ZEP_STORE_POSTGRES_DSN=postgres://postgres:postgres@bot_postgres:5432/bot_memory?sslmode=disable
+      - ZEP_OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "8001:8000"
+
 volumes:
   storage_data:
   postgres_data:
   redis_data:
+  bot_pg_data:

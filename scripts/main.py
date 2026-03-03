@@ -26,7 +26,7 @@ def format_bot_response(response_text: str) -> list[str]:
     chunks = [c.strip() for c in response_text.split("\n\n") if c.strip()]
     return chunks if chunks else [response_text]
 
-def razonar_estado(state: AgentState):
+def razonar_estado(state: AgentState, config: RunnableConfig):
     """
     Nodo principal: El LLM decide qué decir o si llamar a una  herramienta.
     """
@@ -48,7 +48,19 @@ def razonar_estado(state: AgentState):
         fecha_actual_str += f"- {nombre_dia_futuro} {dia_futuro.day} de {nombre_mes_futuro}\n"
         
     fecha_actual_str += "\nTen esto en cuenta obligatoriamente para calcular fechas si el usuario dice 'mañana', 'el miércoles', 'próxima semana', etc."
-    system_prompt_dinamico = SYSTEM_PROMPT + fecha_actual_str
+    # OBTENER MEMORIA SEMÁNTICA DE ZEP (SI EXISTE)
+    thread_id = config.get("configurable", {}).get("thread_id", "default")
+    zep_context = ""
+    if 'zep_client' in globals() and zep_client:
+        try:
+            # Recuperar memoria de Zep (resumen y hechos)
+            zep_mem = zep_client.memory.get_memory(thread_id)
+            if zep_mem and zep_mem.summary:
+                zep_context = f"\n\n# MEMORIA A LARGO PLAZO DEL LEAD:\n{zep_mem.summary.content}\nUtiliza este contexto histórico si es relevante para la conversación actual."
+        except Exception:
+            pass # Si la sesión no existe en Zep aún, ignoramos
+
+    system_prompt_dinamico = SYSTEM_PROMPT + fecha_actual_str + zep_context
     
     # Agregar o actualizar el system prompt iterativamente
     if not messages:
@@ -130,4 +142,37 @@ workflow.add_conditional_edges("agent", route_after_agent)
 workflow.add_edge("tools_node", "agent")
 
 # Compilar grafo
-graph = workflow.compile()
+from psycopg_pool import ConnectionPool
+from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.memory import MemorySaver
+
+DB_URI = os.getenv("DATABASE_URL", "postgres://postgres:postgres@bot_postgres:5432/bot_memory")
+
+# Fallback por defecto
+checkpointer = MemorySaver()
+
+try:
+    # Intentamos conectar a PostgreSQL para memoria persistente
+    pool = ConnectionPool(conninfo=DB_URI, max_size=10, timeout=5.0)
+    checkpointer_pg = PostgresSaver(pool)
+    checkpointer_pg.setup()
+    checkpointer = checkpointer_pg
+    print("✅ LangGraph Checkpointer conectado a PostgreSQL.")
+except Exception as e:
+    print(f"⚠️ No se pudo conectar a Postgres Checkpointer. Usando MemorySaver volátil. Error: {e}")
+
+graph = workflow.compile(checkpointer=checkpointer)
+
+# --- ZEP CLIENT SETUP ---
+from zep_python import ZepClient
+from zep_python.exceptions import NotFoundError
+
+ZEP_URL = os.getenv("ZEP_URL", "http://zep_server:8000")
+ZEP_API_KEY = os.getenv("ZEP_API_KEY", "")
+
+try:
+    zep_client = ZepClient(base_url=ZEP_URL, api_key=ZEP_API_KEY)
+    print(f"✅ Zep Client inicializado en {ZEP_URL}")
+except Exception as e:
+    zep_client = None
+    print(f"⚠️ Zep Client falló al inicializar: {e}")

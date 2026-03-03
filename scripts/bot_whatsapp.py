@@ -20,8 +20,8 @@ CHATWOOT_ACCESS_TOKEN = os.getenv("CHATWOOT_ACCESS_TOKEN")
 # Inicializar Servidor Web
 app = FastAPI(title="Chatwoot Agent Webhook")
 
-# Memoria local volatil (Igual que Telegram)
-MEMORY_STORAGE = {}
+# Memoria delegada completamente a Postgres Checkpointer
+# MEMORY_STORAGE = {}
 
 def send_chatwoot_message(conversation_id: str, text: str):
     """Envía un texto (o imagen) a la conversación en Chatwoot, quien lo retransmitirá al cliente"""
@@ -138,29 +138,48 @@ async def handle_chatwoot_webhook(request: Request):
 
 async def procesar_langgraph(thread_id: str, user_text: str):
     """
-    Función que inyecta la memoria, llama a GPT/LangGraph y devuelve los mensajes a Chatwoot.
+    Función que inyecta el mensaje al Graph persistente, recupera la respuesta y empuja metadata a Zep.
     """
-    # Iniciar estado si es la primera vez que escribe en este thread_id (conversation_id)
-    if thread_id not in MEMORY_STORAGE:
-        MEMORY_STORAGE[thread_id] = {
-            "historial_mensajes": [],
+    from main import graph, zep_client
+    config = {"configurable": {"thread_id": thread_id}}
+    
+    # 1. Recuperar Snapshot guardado en PostgreSQL (Si existe)
+    estado_previo = graph.get_state(config)
+    
+    # 2. Invocamos LangGraph
+    if not estado_previo.values:
+        # Inicialización en frío de variables obligatorias
+        input_state = {
+            "historial_mensajes": [HumanMessage(content=user_text)],
             "datos_recolectados": {},
             "fase_venta": "Nueva",
             "buffer_mensajes": [],
             "esperando_humano": False
         }
-        
-    estado_actual = MEMORY_STORAGE[thread_id]
+    else:
+        # Solo inyectar el nuevo mensaje, Postgres se encarga de re-hidratar el resto
+        input_state = {
+            "historial_mensajes": [HumanMessage(content=user_text)]
+        }
     
-    # 1. Agregar el mensaje del humano
-    estado_actual["historial_mensajes"].append(HumanMessage(content=user_text))
+    nuevo_estado = graph.invoke(input_state, config)
     
-    # 2. Ejecutar el grafo de LangGraph
-    config = {"configurable": {"thread_id": thread_id}}
-    nuevo_estado = graph.invoke(estado_actual, config)
+    buffer = nuevo_estado.get("buffer_mensajes", [])
+    bot_responses = [msg for msg in buffer if msg.strip()]
     
-    # Actualizamos memoria
-    MEMORY_STORAGE[thread_id] = nuevo_estado
+    # 2. Guardar en Zep para memoria semántica y summarization de largo plazo
+    if zep_client:
+        try:
+            from zep_python.models import Memory, Message as ZepMessage
+            
+            zep_messages = [ZepMessage(role="user", content=user_text)]
+            for br in bot_responses:
+               zep_messages.append(ZepMessage(role="ai", content=br))
+               
+            zep_memory = Memory(messages=zep_messages)
+            zep_client.memory.add_memory(thread_id, zep_memory)
+        except Exception as e:
+            print(f"Error mandando datos a Zep: {e}")
     
     # 3. Leer buffer y enviar a Chatwoot secuencialmente
     buffer = nuevo_estado.get("buffer_mensajes", [])

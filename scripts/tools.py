@@ -315,15 +315,16 @@ def transferir_a_humano(motivo_transferencia: str) -> str:
            motivo_transferencia: Breve resumen para el humano de por qué estás abandonando el chat.
     """
     try:
-        smtp_user = os.environ.get('SMTP_USERNAME')
-        smtp_pass = os.environ.get('SMTP_PASSWORD')
+        smtp_user = os.environ.get('SMTP_USER')
+        smtp_pass = os.environ.get('SMTP_PASS')
         smtp_host = os.environ.get('SMTP_ADDRESS', 'smtp.gmail.com')
         smtp_port = int(os.environ.get('SMTP_PORT', 587))
+        admin_email = os.environ.get('ADMIN_EMAIL', smtp_user)
         
         if smtp_user and smtp_pass:
             msg = MIMEMultipart()
             msg['From'] = smtp_user
-            msg['To'] = smtp_user # Enviamos al mismo admin
+            msg['To'] = admin_email # Enviamos al mismo admin
             msg['Subject'] = "🚨 ALERTA: Un Lead requiere Asistencia Humana (Chatwoot)"
             body = f"El bot ha transferido una conversación.\n\nMotivo que dio la IA: {motivo_transferencia}\n\nIngresa a Chatwoot para continuar la conversación y recuerda volver a encender el bot (bot_status=on) al terminar."
             msg.attach(MIMEText(body, 'plain'))

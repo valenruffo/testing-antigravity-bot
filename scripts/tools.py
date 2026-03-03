@@ -240,6 +240,9 @@ def agendar_cita_calcom(fecha_hora_utc: str, nombre_cliente: str, email_cliente:
         if not calcom_url or not api_key or api_key == "COMPLETAR_DESPUES_DEL_SETUP":
             return "Error: Cal.com no configurado. El administrador debe completar CALCOM_API_KEY en el .env."
 
+        if not email_cliente or "@" not in email_cliente:
+            return "ACCIÓN REQUERIDA: No tengo el correo del cliente. Debo pedírselo antes de poder agendar. Pregúntale su email."
+
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",

@@ -208,7 +208,7 @@ def obtener_slots_disponibles(fecha_inicio: str, fecha_fin: str) -> str:
                 horas = []
                 for s in slots:
                     try:
-                        t = s["time"]  # ej: "2026-03-05T09:00:00-03:00"
+                        t = s["start"]  # ej: "2026-03-06T09:00:00.000-03:00"
                         hora = t[11:16]  # extrae HH:MM
                         horas.append(hora)
                     except Exception:

@@ -105,10 +105,17 @@ def ejecutar_herramientas(state: AgentState, config: RunnableConfig):
             thread_id = config.get("configurable", {}).get("thread_id")
             if thread_id:
                 try:
-                    url = f"{os.getenv('CHATWOOT_BASE_URL', 'http://chatwoot_rails:3000')}/api/v1/accounts/{os.getenv('CHATWOOT_ACCOUNT_ID', '1')}/conversations/{thread_id}/toggle_status"
+                    base_url = f"{os.getenv('CHATWOOT_BASE_URL', 'http://chatwoot_rails:3000')}/api/v1/accounts/{os.getenv('CHATWOOT_ACCOUNT_ID', '1')}/conversations/{thread_id}"
                     headers = {"api_access_token": os.getenv("CHATWOOT_ACCESS_TOKEN")}
-                    requests.post(url, headers=headers, json={"status": "open"})
-                    print(f"✅ Conversación {thread_id} transferida a humano en Chatwoot (status=open)")
+                    
+                    # 1. Cambiar estado a abierto (notificación visual)
+                    requests.post(f"{base_url}/toggle_status", headers=headers, json={"status": "open"})
+                    
+                    # 2. Apagar el Bot explícitamente usando Custom Attributes
+                    payload_attr = {"custom_attributes": {"bot_status": "off"}}
+                    requests.put(base_url, headers=headers, json=payload_attr)
+                    
+                    print(f"✅ Conversación {thread_id} transferida (status=open, bot_status=off)")
                 except Exception as e:
                     print(f"Error cambiando status en Chatwoot: {e}")
             

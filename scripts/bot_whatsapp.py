@@ -105,13 +105,22 @@ async def handle_chatwoot_webhook(request: Request):
             content = body.get("content", "")
             conversation = body.get("conversation", {})
             conversation_id = conversation.get("id")
-            status = conversation.get("status") # pending, open, resolved
             
-            # HITL Nativo de Chatwoot: 
-            # Si el estado es "open", significa que un humano ha tomado control de la conversación.
-            # Por ende, el bot calla y no responde.
-            if status == "open":
-                print(f"🛑 [HITL] Mensaje en conversación {conversation_id} ignorado. Estado OPEN (Humano operando).")
+            # Validar Custom Attribute: bot_status
+            custom_attributes = conversation.get("custom_attributes", {})
+            # Si bot_status no existe, por defecto asumimos "on"
+            bot_status = custom_attributes.get("bot_status", "on")
+            
+            # HITL Nativo de Chatwoot vía Custom Attribute
+            if bot_status == "off":
+                print(f"🛑 [HITL] Mensaje en conversación {conversation_id} ignorado. El Agente apagó el Bot (bot_status=off).")
+                return {"status": "ok"}
+            
+            # Extra check para compatibilidad
+            status = conversation.get("status")
+            if status == "open" and bot_status != "on":
+                # Respetamos el behavior viejo si está abierto pero NO explícitamente encendido
+                print(f"🛑 [HITL] Mensaje ignorado. Estado OPEN sin override explícito.")
                 return {"status": "ok"}
                 
             # Si el mensaje no es de texto, ignoramos

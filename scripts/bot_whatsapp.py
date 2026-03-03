@@ -111,8 +111,13 @@ async def handle_chatwoot_webhook(request: Request):
             
             # Validar Custom Attribute: bot_status
             custom_attributes = conversation.get("custom_attributes", {})
-            # Si bot_status no existe, por defecto asumimos "on"
-            bot_status = custom_attributes.get("bot_status", "on")
+            # Si bot_status visualmente no existe en Chatwoot (nuevo lead), lo forzamos a "on"
+            bot_status_visual = custom_attributes.get("bot_status")
+            bot_status = bot_status_visual or "on"
+            
+            if bot_status_visual is None:
+                # Disparamos tarea en background para que Chatwoot actulice el Select de la UI al instante
+                asyncio.create_task(fijar_estado_visual_on(conversation_id))
             
             # HITL Nativo de Chatwoot vía Custom Attribute
             if bot_status == "off":
@@ -146,20 +151,37 @@ async def handle_chatwoot_webhook(request: Request):
             bot_status = custom_attributes.get("bot_status", "on")
             conversation_id = body.get("id")
             
+            # Chequeamos si la conversación ya estaba off en nuestra RAM
+            estaba_off = conversation_id in bot_off_conversations
+            
             if bot_status == "off":
-                bot_off_conversations.add(conversation_id)
-            elif bot_status == "on" and conversation_id in bot_off_conversations:
-                # Transición detectada de OFF a ON
-                bot_off_conversations.discard(conversation_id)
-                print(f"🟢 [HITL] Conversación {conversation_id} devuelta a ON. Enviando saludo de reconexión.")
-                msg_bienvenida = "Mi compañero ha finalizado tu solicitud. ¡He regresado! Dime, ¿en qué más te puedo ayudar o qué dudas te quedaron sobre las propiedades?"
-                # Enviar el saludo directo usando la API de Chatwoot
-                asyncio.create_task(enviar_saludo_directo(conversation_id, msg_bienvenida))
+                if not estaba_off:
+                    bot_off_conversations.add(conversation_id)
+                    # Transición detectada de ON a OFF
+                    print(f"🛑 [HITL] Conversación {conversation_id} asignada a humano manualmente. Enviando saludo temporal de transferencia.")
+                    msg_despedida = "Te pondré en contacto con un agente humano. Por favor, aguarda un momento en línea."
+                    asyncio.create_task(enviar_saludo_directo(conversation_id, msg_despedida))
+                    
+            elif bot_status == "on":
+                if estaba_off:
+                    bot_off_conversations.discard(conversation_id)
+                    # Transición detectada de OFF a ON
+                    print(f"🟢 [HITL] Conversación {conversation_id} devuelta a ON. Enviando saludo de reconexión.")
+                    msg_bienvenida = "Mi compañero ha finalizado tu solicitud. ¡He regresado! Dime, ¿en qué más te puedo ayudar o qué dudas te quedaron sobre las propiedades?"
+                    asyncio.create_task(enviar_saludo_directo(conversation_id, msg_bienvenida))
                             
     except Exception as e:
         print(f"Error procesando el webhook de Chatwoot: {e}")
         
     return {"status": "ok"}
+
+async def fijar_estado_visual_on(conversation_id: int):
+    """Fuerza a Chatwoot a mostrar 'on' en el dropdown de atributos de una conversación nueva"""
+    import os
+    import requests
+    url = f"{os.environ.get('CHATWOOT_BASE_URL')}/api/v1/accounts/{os.environ.get('CHATWOOT_ACCOUNT_ID', '1')}/conversations/{conversation_id}/custom_attributes"
+    headers = {"api_access_token": os.environ.get("CHATWOOT_ACCESS_TOKEN")}
+    requests.post(url, headers=headers, json={"custom_attributes": {"bot_status": "on"}})
 
 async def enviar_saludo_directo(conversation_id: int, mensaje: str):
     """

@@ -1,6 +1,6 @@
 # Arquitectura Integral: Agente Inmobiliario Autónomo (Omnicanal)
 
-Esta documentación proporciona una visión técnica, funcional y de infraestructura "End-to-End" (de principio a fin) de cómo opera el bot inteligente para Bienes Raíces. El sistema conecta **WhatsApp Oficial (Meta)** con un CRM Omnicanal (**Chatwoot**), orquestando las respuestas mediante un agente neuro-lingüístico (**LangGraph / OpenAI**) capaz de agendar eventos (Google Calendar) y salvar métricas (Google Sheets), todo sobre un VPS seguro aislado mediante Docker y Cloudflare.
+Esta documentación proporciona una visión técnica, funcional y de infraestructura de extremo a extremo de cómo opera el bot inteligente para Bienes Raíces. El sistema conecta **WhatsApp Oficial (Meta)** con un CRM Omnicanal (**Chatwoot**), orquestando las respuestas mediante un agente neuro-lingüístico (**LangGraph / OpenAI**) capaz de agendar eventos (Google Calendar) y salvar métricas (Google Sheets), todo sobre un VPS seguro aislado mediante Docker y Cloudflare.
 
 ---
 
@@ -31,9 +31,9 @@ Para entender cómo funciona tu bot, imagina el recorrido de un mensaje desde qu
 
 - **LangGraph (LangChain):** No es un simple script de chat. LangGraph permite crear "Agentes" que pueden entrar en bucles de razonamiento (`Razonar -> Actuar (Tools) -> Observar -> Responder`). Es la columna vertebral que le da el libre albedrío estructurado al bot para interactuar con hojas de cálculo y calendarios sin hardcodear comandos fijos.
 - **FastAPI (Python):** El servidor que atrapa los mensajes en milisegundos. Se eligió por ser extremadamente ligero, asíncrono y robusto para tráfico alto de webhooks.
-- **Chatwoot (Ruby on Rails + Sidekiq + Postgres):** Es tu interfaz gráfica de usuario. Actúa como el muro fronterizo entre Meta y tú. Permite una vista omnicanal. Elegimos usar Chatwoot como "puente" y no Meta directo en Python, porque te permite leer los chats en tiempo real sin romper los flujos de la API y contar con un panel de analíticas empresarial.
-- **Docker & Docker Compose:** Todo el bot y las piezas pesadas de Chatwoot (bases de datos Redis, Postgres, background workers) conviven en cajas selladas. Así garantizamos que funcione hoy y en 5 años de la misma manera, levantándose todo con 1 solo comando.
-- **Cloudflare Zero Trust (Túneles):** Tu VPS está protegido en un bunker. Literalmente no abriste ningún puerto de internet para recibir WhatsApp. Cloudflare instaló un "Túnel" persistente `whatsapp_bot_tunnel` que conecta tu contenedor directo a los edge-servers globales, traduciendo tus `.com.ar` hacia los contenedores correspondientes de forma invulnerable a DDoS.
+- **Chatwoot (Ruby on Rails + Sidekiq + Postgres):** Es tu interfaz gráfica de usuario. Actúa como el muro fronterizo entre Meta y tú. Permite una vista omnicanal. Elegimos usar Chatwoot como "puente" y no Meta directo en Python, porque te permite leer los chats en tiempo real sin romper los flujos de la API y contar con un panel de analíticas empresarial. Sus procesos en segundo plano (Sidekiq) son los responsables del envío asíncrono de mensajes.
+- **Docker & Docker Compose:** Todo el bot y las piezas pesadas de Chatwoot (bases de datos Redis, Postgres, procesos en segundo plano) conviven en cajas selladas. Así garantizamos que funcione hoy y en 5 años de la misma manera, levantándose todo con 1 solo comando.
+- **Cloudflare Zero Trust (Túneles):** Tu VPS está protegido en un búnker. Literalmente no abriste ningún puerto de internet para recibir WhatsApp. Cloudflare instaló un "Túnel" persistente `whatsapp_bot_tunnel` que conecta tu contenedor directo a los servidores perimetrales globales de Cloudflare, traduciendo tus `.com.ar` hacia los contenedores correspondientes de forma invulnerable a DDoS.
 
 ---
 
@@ -77,7 +77,7 @@ El corazón del proyecto alojado dentro del VPS se compone de:
 ## 5. Mantenimiento y Extensibilidad
 
 * **Si necesitas agregar una Herramienta nueva (ej. Mandar un PDF):** Lo haces creando una nueva función con decoración `@tool` dentro de `scripts/tools.py` y pasándola a LangGraph en `main.py`.
-* **Si falla Chatwoot:** Chatwoot es una aplicación Ruby On Rails enorme con background jobs (`Sidekiq`). Siempre revisa los logs de Sidekiq.
+* **Si falla Chatwoot:** Chatwoot es una aplicación Ruby on Rails grande con procesos en segundo plano (`Sidekiq`). Siempre revisa sus registros ejecutando `docker logs chatwoot_sidekiq -f`.
 * **Si falla el Bot Local:** Monitorea el contenedor `whatsapp_bot_app` usando el comando `docker logs whatsapp_bot_app -f`. Verás cómo entra cada POST de Chatwoot y qué decisiones lógicas toma Python antes de derivar el output al LLM.
 
 FIN DEL PROTOCOLO DE CONOCIMIENTO.

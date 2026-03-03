@@ -17,7 +17,7 @@ Si en ese mismo segundo el Cliente B escribe para pedir precios, el Bot le respo
 Cuando el LLM decide usar la herramienta `transferir_a_humano()`, ocurren dos cosas en el backend casi al mismo tiempo:
 
 1. **Mensaje al Cliente (Auto-Respuesta)**: El bot responde al cliente: *"Te entiendo perfectamente. Aguarda un momento en línea, estoy transfiriendo tu caso a uno de nuestros asesores para que te asista personalmente."*
-2. **Notificación al Operador (La Alerta)**: El bot enviará una notificación asíncrona urgente. Como WhatsApp Cloud API no permite "mensajes a uno mismo" fácilmente, la mejor práctica en este Boilerplate es que **el Bot envíe un mensaje a un Grupo de Telegram privado del equipo de ventas**, o dispare un correo electrónico.
+2. **Notificación al Operador (La Alerta)**: El bot enviará una notificación asíncrona urgente. Como WhatsApp Cloud API no permite "mensajes a uno mismo" fácilmente, la mejor práctica en este sistema base es que **el Bot envíe un mensaje a un Grupo de Telegram privado del equipo de ventas**, o dispare un correo electrónico.
    * *Ejemplo de Alerta Interna:* 🚨 **¡Atención Humana Requerida!** El cliente +549112345678 ha solicitado hablar con un operador. El bot ha sido pausado para este número.
 
 ## 💬 3. ¿Cómo habla el humano con el cliente? 
@@ -30,7 +30,9 @@ A partir de ese momento, el humano chatea normalmente. Al estar la variable `esp
 
 Una vez que el humano resolvió el problema del cliente, cerró la venta, o simplemente quiere devolverle el cliente a la Inteligencia Artificial, necesita una forma de decírselo al servidor.
 
-El método más robusto y universal (sin requerir paneles web extra) es usar "Comandos de Sombra" (Shadow Commands) directamente en el chat de WhatsApp.
+El método más robusto y universal (sin requerir paneles web adicionales) es usar "Comandos Ocultos" directamente en el chat de WhatsApp.
+
+> ⚠️ **Nota Histórica:** Este flujo fue el diseño original basado en WhatsApp Cloud API pura. En la arquitectura actual con Chatwoot, la reactivación del bot se hace simplemente cambiando el atributo `bot_status` a `on` desde el selector en el panel de Chatwoot. El comando `/bot_resume` ya no se usa.
 
 **El Flujo de Reactivación:**
 1. Tú (el humano), desde tu celular de WhatsApp Business, le envías un mensaje literal al cliente que diga: `/bot_resume`

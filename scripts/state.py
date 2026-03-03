@@ -25,5 +25,5 @@ class AgentState(TypedDict):
     # Lista de strings con el mensaje final dividido para simular fluidez humana en Telegram
     buffer_mensajes: list[str]
     
-    # HITL (Human-in-the-Loop): Flag que detiene al bot y transfiere al agente humano
+    # Bandera HITL (Asistencia Humana): Detiene al bot y transfiere al agente humano
     esperando_humano: bool

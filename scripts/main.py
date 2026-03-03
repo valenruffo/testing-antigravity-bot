@@ -65,7 +65,7 @@ def razonar_estado(state: AgentState, config: RunnableConfig):
             if data and data.get("summary") and data["summary"].get("content"):
                 zep_context = f"\n\n# MEMORIA A LARGO PLAZO DEL LEAD:\n{data['summary']['content']}\nUtiliza este contexto histórico si es relevante para la conversación actual."
     except Exception as e:
-        print(f"Zep fetch summary dict fail: {e}")
+        print(f"Zep: no se pudo obtener el resumen de memoria - {e}")
 
     system_prompt_dinamico = SYSTEM_PROMPT + fecha_actual_str + zep_context
     system_prompt_dinamico += """

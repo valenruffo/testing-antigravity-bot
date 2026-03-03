@@ -13,7 +13,7 @@ La nueva topología de red será:
 1. **Recepción:** El cliente escribe por WhatsApp. Meta manda el Webhook a **Chatwoot**.
 2. **Delegación Inicial:** Chatwoot crea la conversación y la asigna automáticamente a nuestro **Agente Bot** (FastAPI).
 3. **Procesamiento:** Chatwoot le manda un Webhook a `bot_whatsapp.py`. LangGraph procesa y responde enviando el mensaje a la **API de Chatwoot** (no a Meta). Chatwoot se encarga de retransmitirlo a WhatsApp.
-4. **Human in the Loop (HITL):** Cuando LangGraph decide transferir a un humano, usa la API de Chatwoot para cambiar el estado de la conversación de `bot` a `open`. 
+4. **Asistencia Humana (HITL):** Cuando LangGraph decide transferir a un humano, usa la API de Chatwoot para cambiar el estado de la conversación de `bot` a `abierto`.
 5. **Silencio del Bot:** Al estar en estado `open`, Chatwoot notifica al humano en su pantalla y **deja de mandarle Webhooks al Bot**. El Bot calla automáticamente, y el humano toma el control desde la hermosa interfaz de Chatwoot.
 
 ## Restricciones y Casos Borde (El Bucle de Memoria)
@@ -24,5 +24,5 @@ La nueva topología de red será:
 ## Plan de Ejecución
 1. **Despliegue de Chatwoot:** Añadir los servicios de Chatwoot al `docker-compose.yml` del cliente.
 2. **Configuración Inicial:** El usuario deberá entrar a Chatwoot, crear una Bandeja de Entrada (Inbox) de API o de WhatsApp Cloud, y crear un **Agent Bot**.
-3. **Refactorización del Bot:** Modificar `bot_whatsapp.py` para parsear los payloads de Chatwoot.
+3. **Refactorización del Bot:** Modificar `bot_whatsapp.py` para procesar los paquetes de datos de Chatwoot.
 4. **Refactorización de HITL:** Modificar la Tool `transferir_a_humano` para que haga un POST a Chatwoot y cambie el assignee/estado del ticket.

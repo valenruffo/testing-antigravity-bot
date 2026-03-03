@@ -1,4 +1,14 @@
-# Guía Completa: Cómo Desplegar Scripts en Modal
+# [DEPRECADO] Guía de Despliegue en Modal
+
+> ⚠️ **ESTE DOCUMENTO ESTÁ DEPRECADO Y NO DEBE USARSE COMO REFERENCIA ACTIVA.**
+>
+> La arquitectura de este proyecto fue migrada de **Modal (serverless)** a un **VPS propio en Oracle Cloud con Docker**. Esta guía se conserva únicamente como archivo histórico.
+>
+> **Referencia actualizada:** Consulta el `README.md` en la raíz del proyecto y el archivo `directivas/arquitectura_vps_multi-tenant.md` para entender la infraestructura actual.
+
+---
+
+# Guía Completa: Cómo Desplegar Scripts en Modal (Referencia Histórica)
 
 Esta guía te enseñará cómo convertir tus scripts de Python en aplicaciones serverless desplegadas en Modal.com, incluyendo manejo de secrets y autenticación OAuth con Google.
 

@@ -161,6 +161,38 @@ def agendar_cita(fecha_hora_inicio_iso: str, nombre_cliente: str, correo_cliente
         start_time = datetime.fromisoformat(fecha_hora_inicio_iso)
         end_time = start_time + timedelta(minutes=30)
         
+        # ============================================================
+        # VALIDACIÓN ESTRICTA DE HORARIO LABORAL (capa de seguridad)
+        # Estas reglas son un complemento al System Prompt del LLM.
+        # Si el LLM intenta agendar fuera del rango, la herramienta
+        # rechaza el pedido directamente sin tocar Google Calendar.
+        # ============================================================
+        HORARIOS_LABORALES = {
+            0: (9, 0, 15, 0),   # Lunes: 09:00 a 15:00
+            1: (9, 0, 18, 0),   # Martes: 09:00 a 18:00
+            2: (9, 0, 18, 0),   # Miércoles: 09:00 a 18:00
+            3: (9, 0, 15, 0),   # Jueves: 09:00 a 15:00
+            4: (9, 0, 15, 0),   # Viernes: 09:00 a 15:00
+        }
+        DIAS_ESP = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+        
+        dia_semana = start_time.weekday()
+        if dia_semana >= 5:
+            return f"NO SE PUEDE AGENDAR: El {start_time.strftime('%Y-%m-%d')} es fin de semana ({DIAS_ESP[dia_semana]}). El broker NO trabaja sábados ni domingos. Pide al cliente un día hábil (Lunes a Viernes)."
+        
+        horario = HORARIOS_LABORALES[dia_semana]
+        inicio_lab = start_time.replace(hour=horario[0], minute=horario[1], second=0, microsecond=0)
+        fin_lab    = start_time.replace(hour=horario[2], minute=horario[3], second=0, microsecond=0)
+        # La cita dura 30 min: el último inicio posible es 30 min antes del cierre
+        ultimo_inicio = fin_lab - timedelta(minutes=30)
+        
+        if start_time < inicio_lab or start_time > ultimo_inicio:
+            return (f"NO SE PUEDE AGENDAR: La hora {start_time.strftime('%H:%M')} está fuera del horario laboral del {DIAS_ESP[dia_semana]}. "
+                    f"Ese día el broker atiende de {horario[0]:02d}:{horario[1]:02d} a {horario[2]:02d}:{horario[3]:02d} (GMT-3), "
+                    f"y el último turno disponible comienza a las {ultimo_inicio.strftime('%H:%M')}. "
+                    f"Ofrécele al cliente una hora dentro de ese rango.")
+        # ============================================================
+        
         event = {
             'summary': f'{motivo} - {nombre_cliente}',
             'description': f'Llamada de perfilación y presentación de opciones exclusivas.\nCliente: {nombre_cliente}\nContacto/Correo: {correo_cliente}',

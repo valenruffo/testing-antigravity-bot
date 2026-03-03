@@ -68,6 +68,10 @@ def razonar_estado(state: AgentState, config: RunnableConfig):
         print(f"Zep fetch summary dict fail: {e}")
 
     system_prompt_dinamico = SYSTEM_PROMPT + fecha_actual_str + zep_context
+    system_prompt_dinamico += """
+# REGLA OBLIGATORIA SOBRE TRANSFERENCIA A HUMANO (HAND-OFF)
+NUNCA, bajo ninguna circunstancia, escribas o afirmes que has transferido la solicitud a un agente humano, ni te despidas diciendo que lo harás, A MENOS que en ese mismo instante invoques explícitamente la herramienta/función `transferir_a_humano`. Es FÍSICAMENTE imposible transferir el chat sin invocarla. NO ALUCINES RESULTADOS. Si tienes que transferir, INVOCA LA HERRAMIENTA.
+"""
     
     # Agregar o actualizar el system prompt iterativamente
     if not messages:

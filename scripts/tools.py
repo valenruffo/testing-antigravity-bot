@@ -158,11 +158,10 @@ def obtener_link_agenda() -> str:
     """Devuelve el link público de Cal.com para que el cliente elija su propio horario de forma autónoma.
     Úsalo cuando el cliente prefiera auto-agendarse en el horario que más le convenga.
     """
-    calcom_url = os.environ.get("CALCOM_URL", "")
+    # El link de reserva siempre usa cal.com (frontend público), no la URL de la API.
     calcom_username = os.environ.get("CALCOM_USERNAME", "broker")
-    if not calcom_url:
-        return "Error: CALCOM_URL no configurado en el .env."
-    return f"Link de reserva: {calcom_url}/{calcom_username}/asesoria-inmobiliaria"
+    calcom_event_slug = os.environ.get("CALCOM_EVENT_SLUG", "30min")
+    return f"Link de reserva: https://cal.com/{calcom_username}/{calcom_event_slug}"
 
 def obtener_slots_disponibles(fecha_inicio_iso: str, fecha_fin_iso: str) -> str:
     """Consulta los horarios DISPONIBLES en el sistema de agenda (Cal.com) para un rango de fechas.

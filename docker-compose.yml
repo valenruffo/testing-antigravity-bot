@@ -101,7 +101,7 @@ services:
       - "5433:5432"
 
   zep_server:
-    image: getzep/zep:latest
+    image: zepai/zep:latest
     container_name: zep_server
     restart: always
     depends_on:

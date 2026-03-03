@@ -317,9 +317,9 @@ def transferir_a_humano(motivo_transferencia: str) -> str:
     try:
         smtp_user = os.environ.get('SMTP_USER')
         smtp_pass = os.environ.get('SMTP_PASS')
-        smtp_host = os.environ.get('SMTP_ADDRESS', 'smtp.gmail.com')
-        smtp_port = int(os.environ.get('SMTP_PORT', 587))
-        admin_email = os.environ.get('ADMIN_EMAIL', smtp_user)
+        smtp_host = os.environ.get('SMTP_ADDRESS') or 'smtp.gmail.com'
+        smtp_port = int(os.environ.get('SMTP_PORT') or 587)
+        admin_email = os.environ.get('ADMIN_EMAIL') or smtp_user
         
         if smtp_user and smtp_pass:
             msg = MIMEMultipart()

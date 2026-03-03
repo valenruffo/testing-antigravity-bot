@@ -80,6 +80,9 @@ async def verify_webhook():
     """Ruta GET simple por si algún servicio requiere healthcheck"""
     return {"status": "ok", "service": "Chatwoot LangGraph Bot"}
 
+# Memoria temporal para rastrear las conversaciones que fueron transferidas a humanos
+bot_off_conversations = set()
+
 @app.post("/webhook")
 async def handle_chatwoot_webhook(request: Request):
     """
@@ -113,8 +116,14 @@ async def handle_chatwoot_webhook(request: Request):
             
             # HITL Nativo de Chatwoot vía Custom Attribute
             if bot_status == "off":
+                bot_off_conversations.add(conversation_id)
                 print(f"🛑 [HITL] Mensaje en conversación {conversation_id} ignorado. El Agente apagó el Bot (bot_status=off).")
                 return {"status": "ok"}
+            
+            # Si venimos de estar apagados y ahora estamos encendidos pero el evento fue un mensaje normal,
+            # lo limpiaremos de la lista silenciosamente.
+            if bot_status == "on" and conversation_id in bot_off_conversations:
+                bot_off_conversations.discard(conversation_id)
             
             # Extra check para compatibilidad
             status = conversation.get("status")
@@ -130,11 +139,44 @@ async def handle_chatwoot_webhook(request: Request):
                 
             # Pasar la carga al motor de LangGraph
             asyncio.create_task(procesar_langgraph(str(conversation_id), content))
+                
+        elif event == "conversation_updated":
+            # Escuchamos exclusivamente actualizaciones de la conversación
+            custom_attributes = body.get("custom_attributes", {})
+            bot_status = custom_attributes.get("bot_status", "on")
+            conversation_id = body.get("id")
+            
+            if bot_status == "off":
+                bot_off_conversations.add(conversation_id)
+            elif bot_status == "on" and conversation_id in bot_off_conversations:
+                # Transición detectada de OFF a ON
+                bot_off_conversations.discard(conversation_id)
+                print(f"🟢 [HITL] Conversación {conversation_id} devuelta a ON. Enviando saludo de reconexión.")
+                msg_bienvenida = "Mi compañero ha finalizado tu solicitud. ¡He regresado! Dime, ¿en qué más te puedo ayudar o qué dudas te quedaron sobre las propiedades?"
+                # Enviar el saludo directo usando la API de Chatwoot
+                asyncio.create_task(enviar_saludo_directo(conversation_id, msg_bienvenida))
                             
     except Exception as e:
         print(f"Error procesando el webhook de Chatwoot: {e}")
         
     return {"status": "ok"}
+
+async def enviar_saludo_directo(conversation_id: int, mensaje: str):
+    """
+    Simplemente envía un mensaje desde el bot al inbox del usuario a través del API de Chatwoot,
+    y empuja al LangGraph un SystemMessage para que recuerde que lo saludó, manteniendo las cosas sincronizadas.
+    """
+    send_whatsapp_message(str(conversation_id), mensaje)
+    # Empujamos silenciosamente el update a LangGraph para que lo sepa si hace falta,
+    # aunque con el system prompt tal vez no sea 100% necesario, enviar un mensaje con rol AI ayuda al historial.
+    try:
+        from main import graph
+        from langchain_core.messages import AIMessage
+        config = {"configurable": {"thread_id": str(conversation_id)}}
+        # Esto inyecta el mensaje directo al estado como si el bot lo hubiese pensado.
+        graph.update_state(config, {"historial_mensajes": [AIMessage(content=mensaje)]})
+    except Exception as e:
+        print(f"Error inyectando saludo de bienvenida a LangGraph: {e}")
 
 async def procesar_langgraph(thread_id: str, user_text: str):
     """

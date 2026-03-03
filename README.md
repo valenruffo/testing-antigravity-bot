@@ -1,117 +1,83 @@
-# 🤖 AI Autonomous Business Broker (Boilerplate)
+# Arquitectura Integral: Agente Inmobiliario Autónomo (Omnicanal)
 
-![Python](https://img.shields.io/badge/Python-3.13-blue?style=for-the-badge&logo=python&logoColor=white)
-![LangGraph](https://img.shields.io/badge/LangGraph-Agentic_AI-orange?style=for-the-badge)
-![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4o--mini-412991?style=for-the-badge&logo=openai&logoColor=white)
-![Telegram](https://img.shields.io/badge/Telegram-Bot_API-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)
-![Google Workspace](https://img.shields.io/badge/Google_Workspace-APIs-34A853?style=for-the-badge&logo=google&logoColor=white)
-
-Un Agente de Inteligencia Artificial Autónomo diseñado para actuar como un **Vendedor de Alto Nivel**. Construido sobre **LangGraph** y **LangChain**, este agente no es un simple chatbot de preguntas y respuestas; es un gestor de ventas capaz de mantener conversaciones orgánicas "paso a paso", calificar leads, hacer *upselling*, leer bases de datos en tiempo real y gestionar agendamientos complejos directamente en Google Calendar.
+Esta documentación proporciona una visión técnica, funcional y de infraestructura "End-to-End" (de principio a fin) de cómo opera el bot inteligente para Bienes Raíces. El sistema conecta **WhatsApp Oficial (Meta)** con un CRM Omnicanal (**Chatwoot**), orquestando las respuestas mediante un agente neuro-lingüístico (**LangGraph / OpenAI**) capaz de agendar eventos (Google Calendar) y salvar métricas (Google Sheets), todo sobre un VPS seguro aislado mediante Docker y Cloudflare.
 
 ---
 
-## 🚀 Arquitectura y Capacidades Core
+## 1. El Flujo de Vida de un Mensaje (Paso a Paso)
 
-El núcleo de este proyecto es una arquitectura de grafos de estado (StateGraph) donde el LLM (GPT-4o-mini) actúa como el cerebro que razona qué herramienta usar o qué decirle al usuario basándose en el historial de la conversación y reglas estrictas de ventas.
+Para entender cómo funciona tu bot, imagina el recorrido de un mensaje desde que un Lead (Cliente potencial) agarra su celular:
 
-### 🌟 Funcionalidades Principales
+1. **📱 El Cliente Escribe en WhatsApp:** El lead envía un "Hola" a tu número de WhatsApp Business Oficial.
+2. **🌐 Meta (Facebook) Intercepta:** Al ser la API Cloud de WhatsApp oficial, los servidores de Meta reciben el mensaje y disparan un `Webhook` (una alerta web).
+3. **💬 Chatwoot lo Atrapa:** El Webhook de Meta viaja hasta tu servidor y entra a la bandeja de `Chatwoot`. Chatwoot renderiza el mensaje visualmente en tu pantalla (como si fuera WhatsApp Web).
+4. **🧠 Chatwoot Activa el Cerebro:** Instantáneamente, Chatwoot se da cuenta de que recibió un mensaje nuevo y dispara *su propio Webhook* hacia nuestro microservicio en Python (FastAPI).
+5. **⚙️ FastAPI Procesa:** Nuestro endpoint (`POST /webhook`) en Python recibe el paquete de Chatwoot. Revisa el parámetro `bot_status` de la conversación:
+   - Si está en `off` (apagado), el bot ignora el mensaje silenciosamente.
+   - Si está en `on` (o vacío), le pasa el ID de la conversación y el texto al motor heurístico: **LangGraph**.
+6. **🤖 LangGraph y OpenAI Analizan:**
+   - LangGraph busca en su memoria qué se habló antes en esta conversación.
+   - Le envía todo a GPT-4o-mini (OpenAI) junto con las instrucciones maestras del Vendedor (System Prompt).
+   - OpenAI devuelve una respuesta o bien decide **usar una Herramienta** (Google Calendar, Google Sheets o "Transferir a Humano").
+   - LangGraph ejecuta las herramientas de manera autónoma iterando los resultados.
+7. **📤 El Bot Responde:** LangGraph le pide a Python que envíe la respuesta final de regreso usando la **API interna de Chatwoot** (endpoints ocultos). 
+8. **🔄 Bucle Reverso de Entrega:** Chatwoot recibe la petición de Python, la guarda en su base de datos visual para que tú leas lo que dijo el bot, y finalmente, se lo reenvía a Meta para que aparezca en el WhatsApp real del cliente.
 
-1. **Gestión de Interacciones (WhatsApp Cloud API):** Interfaz humana y conversacional. Incluye retrasos aleatorios para imitar el comportamiento de un humano y renderizado multimedia nativo de imágenes.
-2. **Embudo de Ventas Paso a Paso:** El Agente tiene estrictamente prohibido abrumar al usuario con bloques de texto masivos. Conduce la conversación secuencialmente.
-3. **Escaneo de Base de Datos (Google Sheets):** Lee dinámicamente un inventario de propiedades exclusivas, filtra por zona y utiliza estrategias de *upselling* si el presupuesto del cliente es menor al costo de la propiedad.
-4. **CRM Integrado (Google Sheets):** Registra a los leads interesados en una base de datos de seguimiento, incluyendo una "Nota de IA" donde el modelo deja sus impresiones sobre el poder adquisitivo y el perfil del cliente.
-5. **Agendamiento Bidireccional Complejo (Google Calendar):**
-   - **Manejo de Timezones:** Motor de inyección de husos horarios (GMT-3) que le otorga al LLM consciencia temporal del "Aquí y Ahora" para evitar alucinaciones con fechas relativas ("el próximo miércoles").
-   - **Lectura Matemática de Disponibilidad:** Escanea la agenda real del broker, excluye fines de semana, ajusta por horarios comerciales variables y prohíbe solapamientos. Solo ofrece rangos de 30 minutos estrictamente libres.
-   - **Creación, Reagendamiento y Cancelación:** Modifica el calendario en la nube y genera automáticamente enlaces de Google Meet con la información nominal del lead capturada durante la conversación.
-
----
-
-## 🛠️ Tecnologías Utilizadas
-
-- **Framework Agentic:** `langchain`, `langgraph`, `langchain-openai`
-- **Interfaces Cloud:** `google-api-python-client`, `google-auth`
-- **Mensajería:** FastAPI, WhatsApp Cloud API
-- **Entorno & Tipado:** `python-dotenv`, `pydantic`, `typing`
+¡Todo esto ocurre en apenas 2 a 4 segundos!
 
 ---
 
-## 📂 Estructura del Proyecto
+## 2. Tecnologías y "El Por Qué"
+
+- **LangGraph (LangChain):** No es un simple script de chat. LangGraph permite crear "Agentes" que pueden entrar en bucles de razonamiento (`Razonar -> Actuar (Tools) -> Observar -> Responder`). Es la columna vertebral que le da el libre albedrío estructurado al bot para interactuar con hojas de cálculo y calendarios sin hardcodear comandos fijos.
+- **FastAPI (Python):** El servidor que atrapa los mensajes en milisegundos. Se eligió por ser extremadamente ligero, asíncrono y robusto para tráfico alto de webhooks.
+- **Chatwoot (Ruby on Rails + Sidekiq + Postgres):** Es tu interfaz gráfica de usuario. Actúa como el muro fronterizo entre Meta y tú. Permite una vista omnicanal. Elegimos usar Chatwoot como "puente" y no Meta directo en Python, porque te permite leer los chats en tiempo real sin romper los flujos de la API y contar con un panel de analíticas empresarial.
+- **Docker & Docker Compose:** Todo el bot y las piezas pesadas de Chatwoot (bases de datos Redis, Postgres, background workers) conviven en cajas selladas. Así garantizamos que funcione hoy y en 5 años de la misma manera, levantándose todo con 1 solo comando.
+- **Cloudflare Zero Trust (Túneles):** Tu VPS está protegido en un bunker. Literalmente no abriste ningún puerto de internet para recibir WhatsApp. Cloudflare instaló un "Túnel" persistente `whatsapp_bot_tunnel` que conecta tu contenedor directo a los edge-servers globales, traduciendo tus `.com.ar` hacia los contenedores correspondientes de forma invulnerable a DDoS.
+
+---
+
+## 3. Human-In-The-Loop (HITL): Control Total Manual y Automático
+
+El Agente neuro-lingüístico tiene la orden secreta de avisarte (con una Tool llamada `transferir_a_humano()`) cuando detecta que:
+- El cliente pierde la paciencia.
+- El cliente pide un asesor real.
+- Hay un trámite hipotecario crítico donde el Bot prefiere no hacerse responsable.
+
+### ¿Qué hace el Bot cuando transfiere?
+1. Se conecta a la API de Chatwoot silenciosamente.
+2. Inyecta la directiva visual de cambiar la conversación a estado **Abierto** para que te salte la campanita `Status = open`.
+3. Inyecta el "Custom Attribute" o Atributo Personalizado de Conversación `bot_status = off`.
+4. A partir de esa décima de segundo, el bot de FastAPI recibe los mensajes pero dice *"Ignorando mensaje, el Agente apagó el bot"*.
+5. Tú entras, lees, respondes como un humano. Cuando terminas, si quieres que el bot siga lidiando por ti para las próximas interacciones (ejemplo, que confirme una cita mañanera), **simplemente devuelves el menú derecho `Estado del Bot` hacia `on`**.
+
+---
+
+## 4. Estructura de Proyecto en el VPS
+
+El corazón del proyecto alojado dentro del VPS se compone de:
 
 ```text
-.
-├── directivas/                 # Core System de Instrucciones y SOPs (Memoria a Largo Plazo)
-│   ├── cliente_prompt.md       # Reglas de negocio y personalidad del Agente
-│   └── guia_despliegue...      # Guías técnicas y manuales de arquitectura
-├── scripts/                    # Lógica de Ejecución Interactiva
-│   ├── main.py                 # Grafo de estados, inyección de tiempo e inicialización del Agente
-│   ├── bot_whatsapp.py         # Entrypoint del bot en FastAPI y renderizado visual
-│   ├── tools.py                # Definición de herramientas conectadas a APIs externas
-│   ├── prompts.py              # System Prompts, RAG y modelado de Embudo de Ventas
-│   ├── state.py                # Tipado estricto del estado de memoria del Agente
-│   └── auth_google.py          # Módulo de refresh tokens y OAuth2
-├── .env                        # Variables de entorno y API Keys (no trackeado)
-├── credentials.json            # Oauth Client ID de Google Cloud (no trackeado)
-├── token.json                  # Tokens de refresco autorizados (no trackeado)
-└── requirements.txt            # Dependencias del proyecto
+/home/ubuntu/testing-antigravity-bot
+├── 📁 directivas/          - Tu "Cerebro Organizacional". Archivos .md donde defines los flujos y guías para el desarrollo evolutivo del bot y tu equipo IT.
+├── 📁 scripts/             - El corazón lógico en Python puro.
+│   ├── bot_whatsapp.py     - Recibe webhooks de Chatwoot y reescribe los payload en texto limpio.
+│   ├── main.py             - La tubería LangGraph. Invoca OpenAI, y contiene la Tool que te pasa el chat.
+│   ├── prompts.py          - Las instrucciones verbales y personalidad (System Prompt) de la Inmobiliaria.
+│   ├── state.py            - Tipados estrictos. "La memoria de trabajo del Bot".
+│   └── tools.py            - Herramientas conectadas a la civilización (Escribir Sheets, Crear Citas, etc).
+├── docker-compose.yml      - "El Mapa Urbano". Aquí se levantan 5 componentes de Chatwoot y tu contenedor App Python.
+├── .env                    - Credenciales maestras. Todos los IDs de Chatwoot, los Tokens de Facebook y OpenAI.
+├── .tmp/deploy_vps_*.ps1   - Automatismos tuyos para traer código limpio al Servidor y redesplegarlo sin sudar.
+└── README.md               - Este mismo documento integrador.
 ```
 
 ---
 
-## ⚙️ Instalación y Configuración (Paso a Paso)
+## 5. Mantenimiento y Extensibilidad
 
-Si deseas clonar este repositorio y desplegar tu propio Broker, sigue estos pasos:
+* **Si necesitas agregar una Herramienta nueva (ej. Mandar un PDF):** Lo haces creando una nueva función con decoración `@tool` dentro de `scripts/tools.py` y pasándola a LangGraph en `main.py`.
+* **Si falla Chatwoot:** Chatwoot es una aplicación Ruby On Rails enorme con background jobs (`Sidekiq`). Siempre revisa los logs de Sidekiq.
+* **Si falla el Bot Local:** Monitorea el contenedor `whatsapp_bot_app` usando el comando `docker logs whatsapp_bot_app -f`. Verás cómo entra cada POST de Chatwoot y qué decisiones lógicas toma Python antes de derivar el output al LLM.
 
-### 1. Clonar el repositorio
-```bash
-git clone https://github.com/valenruffo/testing-antigravity-bot.git
-cd testing-antigravity-bot
-```
-
-### 2. Configurar el Entorno Virtual
-```bash
-python -m venv venv
-# Activar en Windows
-venv\Scripts\activate
-# Activar en macOS/Linux
-source venv/bin/activate
-
-pip install -r requirements.txt
-```
-
-### 3. Variables de Entorno (`.env`)
-Crea un archivo llamado `.env` en la raíz del proyecto y añade:
-```env
-OPENAI_API_KEY="sk-tu-clave-aqui"
-WHATSAPP_TOKEN="tu-token-temporal-meta"
-WHATSAPP_PHONE_ID="tu-phone-id-meta"
-WHATSAPP_VERIFY_TOKEN="my_secure_webhook_token_2026"
-CLOUDFLARE_TOKEN="tu-token-de-tunel"
-```
-
-### 4. Credenciales de Google Workspace
-El Agente requiere acceso a Google Sheets (CRM/Inventario) y Google Calendar.
-1. Ve a [Google Cloud Console](https://console.cloud.google.com/).
-2. Habilita **Google Sheets API** y **Google Calendar API**.
-3. Ve a Credenciales > Crear Credenciales > ID de cliente de OAuth.
-4. Descarga el archivo, renómbralo a `credentials.json` y colócalo en la raíz del proyecto.
-5. Asegúrate de tener los ID de tus plantillas de Google Sheets configurados en `tools.py`.
-
-### 5. Primera Ejecución (Autorización)
-Para generar el token persistente de Google, ejecuta primero el script principal. Se abrirá una pestaña en tu navegador para que autorices el acceso a tu calendario y hojas de cálculo.
-
-```bash
-docker compose up -d --build
-```
-*Si todo está correcto, el panel de Docker mostrará la App y el Túnel de Cloudflare en verde.*
-
----
-
-## 📈 Futuras Mejoras (Roadmap)
-- [ ] **Migración a Base de Datos Persistente:** Reemplazar el diccionario `MEMORY_STORAGE` de la memoria volatil del bot por un Checkpointer de SQLite o Postgres (vía `langgraph.checkpoint.sqlite`).
-- [ ] **Webhook Serverless:** Transicionar del modelo `run_polling()` a Webhooks en FastAPI para despliegues serverless masivos.
-- [ ] **Integración RAG de Documentos PDF:** Permitirle al Agente enviar y analizar folletos técnicos de productos directamente en WhatsApp.
-
----
-
-> *"Desarrollado como prueba de concepto de interacciones humano-computadora guiadas por lógica de grafos y modelos fundacionales".*
+FIN DEL PROTOCOLO DE CONOCIMIENTO.

@@ -1,5 +1,7 @@
+import os
 import os.path
-from datetime import datetime, timedelta
+import requests
+from datetime import datetime, timedelta, timezone
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -42,11 +44,11 @@ def consultar_propiedades(zona: str = None, presupuesto_maximo: int = None) -> s
     try:
         sheets_service, _ = get_google_services()
         sheet = sheets_service.spreadsheets()
-        
+
         # Obtenemos metadata para saber las hojas que existen
         sheet_metadata = sheet.get(spreadsheetId=SPREADSHEET_ID).execute()
         sheets = sheet_metadata.get('sheets', [])
-        
+
         # Intentamos buscar especificamente la hoja que dice "propiedades"
         nombre_primera_hoja = "propiedades"
         for s in sheets:
@@ -54,19 +56,19 @@ def consultar_propiedades(zona: str = None, presupuesto_maximo: int = None) -> s
             if "propiedades" in titulo.lower():
                 nombre_primera_hoja = titulo
                 break
-        
+
         # Ajustamos el rango a A:G para incluir imágenes
         rango = f"'{nombre_primera_hoja}'!A:G"
-        
+
         result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=rango).execute()
         values = result.get('values', [])
 
         if not values:
             return "No se encontraron propiedades en la base de datos."
-            
+
         header = values[0]
         propiedades_encontradas = []
-        
+
         # Ignora la fila 0 (headers)
         for row in values[1:]:
             # Padding por si las filas están incompletas
@@ -78,23 +80,23 @@ def consultar_propiedades(zona: str = None, presupuesto_maximo: int = None) -> s
             desc = row[4] if len(row) > 4 else ''
             rentabilidad = row[5] if len(row) > 5 else ''
             imagenes = row[6] if len(row) > 6 else ''
-            
+
             # Limpiar el precio asumiendo string tipo "USD 450,000" o "$5000000"
             precio_limpio = ''.join(c for c in str(precio_str) if c.isdigit())
             precio = int(precio_limpio) if precio_limpio else 0
-            
+
             # Filtros básicos (case-insensitive para zona)
             match_zona = not zona or zona.lower() in str(zona_prop).lower()
-            
+
             if match_zona:
                 prop_info = f"- **[ID: {id_prop}] {nombre}** en {zona_prop} ({precio_str})\n  Detalle: {desc}\n  Rentabilidad: {rentabilidad}\n  Imágenes: {imagenes}\n"
                 propiedades_encontradas.append(prop_info)
-                
+
         if propiedades_encontradas:
             return "Aquí tienes las opciones en la base de datos para esa zona:\n" + "\n".join(propiedades_encontradas)
         else:
             return f"Actualmente no cuento con propiedades en {zona}."
-            
+
     except Exception as e:
         print(f"\n\n🚨 GOOGLE API ERROR ---> {str(e)}\n\n")
         return f"Error al consultar la base de datos de propiedades: {str(e)}"
@@ -104,41 +106,41 @@ def registrar_lead(nombre: str, contacto: str, presupuesto: str, zona: str, urge
     try:
         sheets_service, _ = get_google_services()
         sheet = sheets_service.spreadsheets()
-        
+
         # Obtenemos metadata para encontrar una hoja que contenga "lead" en el nombre
         sheet_metadata = sheet.get(spreadsheetId=SPREADSHEET_ID).execute()
         sheets_list = sheet_metadata.get('sheets', '')
-        
+
         nombre_hoja_leads = None
         for s in sheets_list:
             titulo = s.get("properties", {}).get("title", "")
             if "lead" in titulo.lower():
                 nombre_hoja_leads = titulo
                 break
-                
+
         # Si no hay hoja de leads específica, intentamos con la segunda hoja si existe
         if not nombre_hoja_leads and len(sheets_list) > 1:
             nombre_hoja_leads = sheets_list[1].get("properties", {}).get("title")
         elif not nombre_hoja_leads:
-             return "Error: No se encontró una pestaña de 'Leads' en el Google Sheet."
-        
+            return "Error: No se encontró una pestaña de 'Leads' en el Google Sheet."
+
         # Nombre | Teléfono | Interés | Presupuesto | Estado | Nota de la IA
         rango = f"'{nombre_hoja_leads}'!A:F"
-        
+
         # En la directiva original urgencia formaba parte de esto, lo meteremos en la Nota de la IA.
         nota_ia = f"Urgencia/Plazo: {urgencia}. Zona de interés: {zona}."
-        
+
         valores = [
             [nombre, contacto, zona, presupuesto, "Calificado - Agendando", nota_ia]
         ]
         body = {
             'values': valores
         }
-        
+
         sheets_service.spreadsheets().values().append(
-            spreadsheetId=SPREADSHEET_ID, 
+            spreadsheetId=SPREADSHEET_ID,
             range=rango,
-            valueInputOption="USER_ENTERED", 
+            valueInputOption="USER_ENTERED",
             body=body
         ).execute()
 
@@ -146,200 +148,136 @@ def registrar_lead(nombre: str, contacto: str, presupuesto: str, zona: str, urge
     except Exception as e:
         return f"Error al registrar el lead: {str(e)}"
 
-def agendar_cita(fecha_hora_inicio_iso: str, nombre_cliente: str, correo_cliente: str, motivo: str = "Asesoría Inmobiliaria") -> str:
-    """Crea un evento en Google Calendar y genera un link de Google Meet.
-       Args:
-           fecha_hora_inicio_iso: Fecha y hora en formato ISO 8601 (ej: '2026-03-01T15:00:00-03:00')
-           nombre_cliente: El nombre del lead/cliente.
-           correo_cliente: Correo electrónico del cliente (OBLIGATORIO para enviar la invitación).
-           motivo: Zona o propiedad de interés para anotar en el título del evento.
+# =============================================================================
+# HERRAMIENTAS DE AGENDA (Cal.com - Motor de Agenda Self-Hosted)
+# Cal.com actúa como intermediario entre el bot y Google Calendar.
+# Sincroniza automáticamente, aplica reglas de negocio y maneja zonas horarias.
+# =============================================================================
+
+def obtener_link_agenda() -> str:
+    """Devuelve el link público de Cal.com para que el cliente elija su propio horario de forma autónoma.
+    Úsalo cuando el cliente prefiera auto-agendarse en el horario que más le convenga.
+    """
+    calcom_url = os.environ.get("CALCOM_URL", "")
+    calcom_username = os.environ.get("CALCOM_USERNAME", "broker")
+    if not calcom_url:
+        return "Error: CALCOM_URL no configurado en el .env."
+    return f"Link de reserva: {calcom_url}/{calcom_username}/asesoria-inmobiliaria"
+
+def obtener_slots_disponibles(fecha_inicio_iso: str, fecha_fin_iso: str) -> str:
+    """Consulta los horarios DISPONIBLES en el sistema de agenda (Cal.com) para un rango de fechas.
+    Devuelve una lista real de slots libres, ya filtrados por disponibilidad real del calendario.
+    SIEMPRE usa esta herramienta antes de agendar para no inventar horarios.
+    Args:
+        fecha_inicio_iso: Inicio del rango a consultar en formato ISO 8601 UTC (ej: '2026-03-05T00:00:00Z')
+        fecha_fin_iso: Fin del rango en formato ISO 8601 UTC (ej: '2026-03-07T23:59:59Z')
     """
     try:
-        _, calendar_service = get_google_services()
-        
-        # Parseamos la fecha y sumamos 30 mins para el fin
-        start_time = datetime.fromisoformat(fecha_hora_inicio_iso)
-        end_time = start_time + timedelta(minutes=30)
-        
-        # ============================================================
-        # VALIDACIÓN ESTRICTA DE HORARIO LABORAL (capa de seguridad)
-        # Estas reglas son un complemento al System Prompt del LLM.
-        # Si el LLM intenta agendar fuera del rango, la herramienta
-        # rechaza el pedido directamente sin tocar Google Calendar.
-        # ============================================================
-        HORARIOS_LABORALES = {
-            0: (9, 0, 15, 0),   # Lunes: 09:00 a 15:00
-            1: (9, 0, 18, 0),   # Martes: 09:00 a 18:00
-            2: (9, 0, 18, 0),   # Miércoles: 09:00 a 18:00
-            3: (9, 0, 15, 0),   # Jueves: 09:00 a 15:00
-            4: (9, 0, 15, 0),   # Viernes: 09:00 a 15:00
+        calcom_url = os.environ.get("CALCOM_URL", "")
+        api_key = os.environ.get("CALCOM_API_KEY", "")
+        event_type_id = os.environ.get("CALCOM_EVENT_TYPE_ID", "1")
+
+        if not calcom_url or not api_key or api_key == "COMPLETAR_DESPUES_DEL_SETUP":
+            return "Error: Cal.com no configurado. El administrador debe completar CALCOM_API_KEY en el .env."
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "cal-api-version": "2024-09-04"
         }
-        DIAS_ESP = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-        
-        dia_semana = start_time.weekday()
-        if dia_semana >= 5:
-            return f"NO SE PUEDE AGENDAR: El {start_time.strftime('%Y-%m-%d')} es fin de semana ({DIAS_ESP[dia_semana]}). El broker NO trabaja sábados ni domingos. Pide al cliente un día hábil (Lunes a Viernes)."
-        
-        horario = HORARIOS_LABORALES[dia_semana]
-        inicio_lab = start_time.replace(hour=horario[0], minute=horario[1], second=0, microsecond=0)
-        fin_lab    = start_time.replace(hour=horario[2], minute=horario[3], second=0, microsecond=0)
-        # La cita dura 30 min: el último inicio posible es 30 min antes del cierre
-        ultimo_inicio = fin_lab - timedelta(minutes=30)
-        
-        if start_time < inicio_lab or start_time > ultimo_inicio:
-            return (f"NO SE PUEDE AGENDAR: La hora {start_time.strftime('%H:%M')} está fuera del horario laboral del {DIAS_ESP[dia_semana]}. "
-                    f"Ese día el broker atiende de {horario[0]:02d}:{horario[1]:02d} a {horario[2]:02d}:{horario[3]:02d} (GMT-3), "
-                    f"y el último turno disponible comienza a las {ultimo_inicio.strftime('%H:%M')}. "
-                    f"Ofrécele al cliente una hora dentro de ese rango.")
-        # ============================================================
-        
-        event = {
-            'summary': f'{motivo} - {nombre_cliente}',
-            'description': f'Llamada de perfilación y presentación de opciones exclusivas.\nCliente: {nombre_cliente}\nContacto/Correo: {correo_cliente}',
-            'start': {
-                'dateTime': start_time.isoformat(),
-                'timeZone': 'America/Argentina/Buenos_Aires',
+        params = {
+            "eventTypeId": event_type_id,
+            "startTime": fecha_inicio_iso,
+            "endTime": fecha_fin_iso,
+        }
+        resp = requests.get(
+            f"{calcom_url}/api/v2/slots/available",
+            headers=headers, params=params, timeout=10
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # La respuesta tiene formato: {"data": {"slots": {"2026-03-05": [{"time": "..."}]}}}
+        slots_data = data.get("data", {}).get("slots", {})
+        if not slots_data:
+            return "No hay horarios disponibles para ese rango de fechas. Propón otro día al cliente."
+
+        tz_arg = timezone(timedelta(hours=-3))
+        resultado = "HORARIOS DISPONIBLES (verificados y libres en la agenda real):\n"
+        for fecha, slots in sorted(slots_data.items()):
+            if slots:
+                horas_gmt3 = []
+                for s in slots:
+                    try:
+                        dt_utc = datetime.fromisoformat(s["time"].replace("Z", "+00:00"))
+                        dt_gmt3 = dt_utc.astimezone(tz_arg)
+                        horas_gmt3.append(dt_gmt3.strftime("%H:%M"))
+                    except Exception:
+                        pass
+                if horas_gmt3:
+                    resultado += f"- {fecha}: {', '.join(horas_gmt3)} (hora Argentina, GMT-3)\n"
+
+        resultado += "\n🚨 REGLA: Ofrécele SOLO 2-3 opciones al cliente. NUNCA listes todos los horarios de un golpe."
+        return resultado
+    except Exception as e:
+        return f"Error consultando disponibilidad en Cal.com: {str(e)}"
+
+def agendar_cita_calcom(fecha_hora_utc: str, nombre_cliente: str, email_cliente: str, zona_horaria_cliente: str = "America/Argentina/Buenos_Aires", motivo: str = "Asesoría Inmobiliaria") -> str:
+    """Crea una reserva en Cal.com. Cal.com la sincroniza automáticamente con Google Calendar y genera el link de videollamada.
+    ⚠️ La fecha/hora DEBE estar en formato UTC (ej: '2026-03-05T12:00:00Z').
+    Si el cliente eligió las 09:00 (GMT-3), convierte a UTC sumando 3 horas: '2026-03-05T12:00:00Z'.
+    Args:
+        fecha_hora_utc: Fecha y hora de inicio en UTC estricto (ej: '2026-03-05T12:00:00Z').
+        nombre_cliente: Nombre completo del cliente.
+        email_cliente: Correo del cliente para enviarle la invitación y el link de Meet.
+        zona_horaria_cliente: Zona horaria del cliente (default: 'America/Argentina/Buenos_Aires').
+        motivo: Propiedad o zona de interés para incluir en el título de la cita.
+    """
+    try:
+        calcom_url = os.environ.get("CALCOM_URL", "")
+        api_key = os.environ.get("CALCOM_API_KEY", "")
+        event_type_id = int(os.environ.get("CALCOM_EVENT_TYPE_ID", "1"))
+
+        if not calcom_url or not api_key or api_key == "COMPLETAR_DESPUES_DEL_SETUP":
+            return "Error: Cal.com no configurado. El administrador debe completar CALCOM_API_KEY en el .env."
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "cal-api-version": "2024-08-13"
+        }
+        body = {
+            "start": fecha_hora_utc,
+            "eventTypeId": event_type_id,
+            "attendee": {
+                "name": nombre_cliente,
+                "email": email_cliente,
+                "timeZone": zona_horaria_cliente,
+                "language": "es"
             },
-            'end': {
-                'dateTime': end_time.isoformat(),
-                'timeZone': 'America/Argentina/Buenos_Aires',
-            },
-            'attendees': [
-                {'email': correo_cliente},
-            ],
-            'conferenceData': {
-                'createRequest': {
-                    'requestId': f"bot_meet_{start_time.strftime('%Y%m%d%H%M%S')}",
-                    'conferenceSolutionKey': {'type': 'hangoutsMeet'}
-                }
+            "bookingFieldsResponses": {
+                "notes": f"Interés en: {motivo}"
             }
         }
+        resp = requests.post(
+            f"{calcom_url}/api/v2/bookings",
+            headers=headers, json=body, timeout=10
+        )
+        resp.raise_for_status()
+        data = resp.json()
 
-        # Inserta el evento invocando al API. conferenceDataVersion=1 es requerido para crear el Meet.
-        event_result = calendar_service.events().insert(
-            calendarId='primary', 
-            body=event, 
-            conferenceDataVersion=1
-        ).execute()
-        
-        meet_link = event_result.get('hangoutLink')
-        
-        return f"Cita agendada para el {start_time.strftime('%Y-%m-%d %H:%M')}. Link de Meet: {meet_link}"
+        booking = data.get("data", {})
+        meet_link = booking.get("meetingUrl", "")
+        booking_uid = booking.get("uid", "")
+
+        return (
+            f"¡Cita confirmada exitosamente! "
+            f"ID de reserva: {booking_uid}. "
+            f"Link de videollamada: {meet_link}. "
+            f"Se enviará una invitación automática al correo {email_cliente}."
+        )
     except Exception as e:
-        return f"Error al intentar agendar la cita en Calendar: {str(e)}. Intenta confirmar el formato de la fecha."
+        return f"Error al crear la reserva en Cal.com: {str(e)}. Verifica que la hora esté en formato UTC y que el slot siga disponible."
 
-def obtener_horarios_disponibles(fecha_iso: str) -> str:
-    """Obtiene los eventos del calendario para un día específico y deduce qué horarios están ocupados.
-       Args:
-           fecha_iso: Fecha en formato ISO 8601 correspondientes al inicio del día a consultar (ej: '2026-03-01T00:00:00-03:00')
-    """
-    try:
-        _, calendar_service = get_google_services()
-        
-        start_time = datetime.fromisoformat(fecha_iso).replace(hour=0, minute=0, second=0)
-        end_time = start_time + timedelta(days=1)
-        
-        # Validación de Fines de Semana
-        if start_time.weekday() >= 5: # 5 es Sábado, 6 es Domingo
-            return f"El día {start_time.strftime('%Y-%m-%d')} es FIN DE SEMANA. El broker NO TRABAJA los fines de semana. Dile al cliente que solo atiendes de lunes a viernes e indícale que te sugiera un día hábil."
-
-        # Definición hardcodeada de la disponibilidad de la Página de Reservas del Broker
-        horarios_trabajo = {
-            0: "Lunes: de 09:00 a 15:00",
-            1: "Martes: de 09:00 a 18:00",
-            2: "Miércoles: de 09:00 a 18:00",
-            3: "Jueves: de 09:00 a 15:00",
-            4: "Viernes: de 09:00 a 15:00"
-        }
-        
-        dia_semana = start_time.weekday()
-        horario_hoy = horarios_trabajo.get(dia_semana, "09:00 a 18:00")
-        
-        events_result = calendar_service.events().list(
-            calendarId='primary', timeMin=start_time.isoformat(), timeMax=end_time.isoformat(),
-            singleEvents=True, orderBy='startTime', timeZone='America/Argentina/Buenos_Aires'
-        ).execute()
-        events = events_result.get('items', [])
-
-        if not events:
-            return f"Ese día ({start_time.strftime('%Y-%m-%d')}) NO hay reuniones que bloqueen la agenda. Tu horario de atención hoy es {horario_hoy} (GMT-3).\n\n🚨 REGLAS ESTRICTAS DE AGENDA:\n1. Las citas duran EXACTAMENTE 30 minutos.\n2. El último turno agendable comienza 30 minutos antes del cierre (Ej. Si cierras a las 18:00, solo puedes agendar hasta las 17:30).\n3. NUNCA le envíes al cliente la lista gigante de horarios. Pregúntale si prefiere mañana o tarde y dale SOLO 2 O 3 opciones concretas."
-        
-        ocupados = []
-        for event in events:
-            start = event['start'].get('dateTime', event['start'].get('date'))
-            end = event['end'].get('dateTime', event['end'].get('date'))
-            ocupados.append(f"De {start} a {end}")
-            
-        return f"Para el día {start_time.strftime('%Y-%m-%d')}, la agenda ya está OCUPADA en los siguientes horarios por otras reuniones:\n" + "\n".join(ocupados) + f"\n\n🚨 REGLAS ESTRICTAS DE AGENDA:\n1. Tu horario de trabajo hoy es {horario_hoy} (GMT-3).\n2. Las citas duran EXACTAMENTE 30 minutos.\n3. El último turno agendable comienza 30 minutos antes del cierre.\n4. NUNCA listes todos los horarios libres. Pregunta preferencia (mañana/tarde) y ofrece SOLO 2 O 3 opciones puntuales que NO se superpongan con las reuniones ocupadas."
-    except Exception as e:
-        return f"Error al consultar horarios: {str(e)}"
-
-def reagendar_cita(correo_cliente: str, nueva_fecha_hora_iso: str) -> str:
-    """Busca una cita futura agendada con el correo del cliente y modifica la fecha y hora.
-       Args:
-           correo_cliente: Email usado para agendar la cita.
-           nueva_fecha_hora_iso: Nueva fecha y hora en formato ISO 8601 (ej: '2026-03-02T16:00:00-03:00')
-    """
-    try:
-        _, calendar_service = get_google_services()
-        
-        now = datetime.now().isoformat() + 'Z'  # 'Z' indica UTC
-        events_result = calendar_service.events().list(
-            calendarId='primary', timeMin=now, q=correo_cliente,
-            singleEvents=True, orderBy='startTime'
-        ).execute()
-        events = events_result.get('items', [])
-
-        if not events:
-            return "No se encontró ninguna cita futura con ese correo para modificar."
-            
-        event_to_update = events[0]
-        event_id = event_to_update['id']
-        
-        new_start_time = datetime.fromisoformat(nueva_fecha_hora_iso)
-        new_end_time = new_start_time + timedelta(minutes=30)
-        
-        event_to_update['start']['dateTime'] = new_start_time.isoformat()
-        event_to_update['end']['dateTime'] = new_end_time.isoformat()
-        event_to_update['start']['timeZone'] = 'America/Argentina/Buenos_Aires'
-        event_to_update['end']['timeZone'] = 'America/Argentina/Buenos_Aires'
-        
-        updated_event = calendar_service.events().update(
-            calendarId='primary', eventId=event_id, body=event_to_update
-        ).execute()
-        
-        return f"La cita para {correo_cliente} fue exitosamente movida al {new_start_time.strftime('%Y-%m-%d %H:%M')}. Link: {updated_event.get('hangoutLink')}"
-    except Exception as e:
-        return f"Error al modificar la cita: {str(e)}"
-        
-def cancelar_cita(correo_cliente: str) -> str:
-    """Busca una cita futura agendada con el correo del cliente y la elimina del Google Calendar.
-       Args:
-           correo_cliente: Email del asistente (el invitado a la llamada).
-    """
-    try:
-        _, calendar_service = get_google_services()
-        
-        now = datetime.now().isoformat() + 'Z' 
-        events_result = calendar_service.events().list(
-            calendarId='primary', timeMin=now, q=correo_cliente,
-            singleEvents=True, orderBy='startTime'
-        ).execute()
-        events = events_result.get('items', [])
-
-        if not events:
-            return "No se encontró ninguna cita futura con ese correo para cancelar."
-            
-        event_id = events[0]['id']
-        
-        calendar_service.events().delete(
-            calendarId='primary', eventId=event_id
-        ).execute()
-        
-        return f"La cita futura bajo el correo {correo_cliente} fue cancelada y borrada silenciosamente."
-    except Exception as e:
-        return f"Error al cancelar la cita: {str(e)}"
-        
 def transferir_a_humano(motivo_transferencia: str) -> str:
     """Detiene la conversación con la IA y transfiere el caso a un Asesor Humano real.
        Usa esta herramienta DENTRO DEL GRAFO si el cliente se enoja, se atasca o lo pide explícitamente.
@@ -352,15 +290,19 @@ def transferir_a_humano(motivo_transferencia: str) -> str:
         smtp_host = os.environ.get('SMTP_ADDRESS') or 'smtp.gmail.com'
         smtp_port = int(os.environ.get('SMTP_PORT') or 587)
         admin_email = os.environ.get('ADMIN_EMAIL') or smtp_user
-        
+
         if smtp_user and smtp_pass:
             msg = MIMEMultipart()
             msg['From'] = smtp_user
-            msg['To'] = admin_email # Enviamos al mismo admin
+            msg['To'] = admin_email
             msg['Subject'] = "🚨 ALERTA: Un Lead requiere Asistencia Humana (Chatwoot)"
-            body = f"El bot ha transferido una conversación.\n\nMotivo que dio la IA: {motivo_transferencia}\n\nIngresa a Chatwoot para continuar la conversación y recuerda volver a encender el bot (bot_status=on) al terminar."
+            body = (
+                f"El bot ha transferido una conversación.\n\n"
+                f"Motivo que dio la IA: {motivo_transferencia}\n\n"
+                f"Ingresa a Chatwoot para continuar la conversación y recuerda volver a encender el bot (bot_status=on) al terminar."
+            )
             msg.attach(MIMEText(body, 'plain'))
-            
+
             server = smtplib.SMTP(smtp_host, smtp_port)
             server.starttls()
             server.login(smtp_user, smtp_pass)
@@ -372,8 +314,8 @@ def transferir_a_humano(motivo_transferencia: str) -> str:
     except Exception as e:
         print(f"Error mandando SMTP: {e}")
 
-    # 1. Retornaremos un payload especial estructurado que `main.py` atrapará para
+    # Retornaremos un payload especial estructurado que `main.py` atrapará para
     # cambiar el AgentState y notificar a Chatwoot.
     return f"HITL_TRIGGERED||{motivo_transferencia}"
 
-TOOLS = [consultar_propiedades, registrar_lead, agendar_cita, obtener_horarios_disponibles, reagendar_cita, cancelar_cita, transferir_a_humano]
+TOOLS = [consultar_propiedades, registrar_lead, obtener_link_agenda, obtener_slots_disponibles, agendar_cita_calcom, transferir_a_humano]

@@ -188,7 +188,7 @@ async def enviar_saludo_directo(conversation_id: int, mensaje: str):
     Simplemente envía un mensaje desde el bot al inbox del usuario a través del API de Chatwoot,
     y empuja al LangGraph un SystemMessage para que recuerde que lo saludó, manteniendo las cosas sincronizadas.
     """
-    send_whatsapp_message(str(conversation_id), mensaje)
+    send_chatwoot_message(str(conversation_id), mensaje)
     # Empujamos silenciosamente el update a LangGraph para que lo sepa si hace falta,
     # aunque con el system prompt tal vez no sea 100% necesario, enviar un mensaje con rol AI ayuda al historial.
     try:

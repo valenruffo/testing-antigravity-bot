@@ -114,7 +114,8 @@ services:
 
   # --- CAL.COM (MOTOR DE AGENDA SELF-HOSTED) ---
   calcom_app:
-    image: calcom/cal.com:latest
+    image: calcom/cal.com:latest-arm
+    platform: linux/arm64
     container_name: calcom_app
     restart: always
     depends_on:

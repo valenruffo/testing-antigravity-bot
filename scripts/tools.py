@@ -163,13 +163,13 @@ def obtener_link_agenda() -> str:
     calcom_event_slug = os.environ.get("CALCOM_EVENT_SLUG", "30min")
     return f"Link de reserva: https://cal.com/{calcom_username}/{calcom_event_slug}"
 
-def obtener_slots_disponibles(fecha_inicio_iso: str, fecha_fin_iso: str) -> str:
-    """Consulta los horarios DISPONIBLES en el sistema de agenda (Cal.com) para un rango de fechas.
+def obtener_slots_disponibles(fecha_inicio: str, fecha_fin: str) -> str:
+    """Consulta los horarios DISPONIBLES en Cal.com para un rango de fechas.
     Devuelve una lista real de slots libres, ya filtrados por disponibilidad real del calendario.
     SIEMPRE usa esta herramienta antes de agendar para no inventar horarios.
     Args:
-        fecha_inicio_iso: Inicio del rango a consultar en formato ISO 8601 UTC (ej: '2026-03-05T00:00:00Z')
-        fecha_fin_iso: Fin del rango en formato ISO 8601 UTC (ej: '2026-03-07T23:59:59Z')
+        fecha_inicio: Fecha de inicio en formato YYYY-MM-DD (ej: '2026-03-10')
+        fecha_fin: Fecha de fin en formato YYYY-MM-DD (ej: '2026-03-12')
     """
     try:
         calcom_url = os.environ.get("CALCOM_URL", "")
@@ -185,35 +185,36 @@ def obtener_slots_disponibles(fecha_inicio_iso: str, fecha_fin_iso: str) -> str:
         }
         params = {
             "eventTypeId": event_type_id,
-            "startTime": fecha_inicio_iso,
-            "endTime": fecha_fin_iso,
+            "start": fecha_inicio,
+            "end": fecha_fin,
+            "timeZone": "America/Argentina/Buenos_Aires"
         }
         resp = requests.get(
-            f"{calcom_url}/api/v2/slots/available",
+            f"{calcom_url}/v2/slots",
             headers=headers, params=params, timeout=10
         )
         resp.raise_for_status()
         data = resp.json()
 
-        # La respuesta tiene formato: {"data": {"slots": {"2026-03-05": [{"time": "..."}]}}}
-        slots_data = data.get("data", {}).get("slots", {})
+        # La respuesta tiene formato: {"data": {"2026-03-05": [{"time": "..."}]}, "status": "success"}
+        slots_data = data.get("data", {})
         if not slots_data:
             return "No hay horarios disponibles para ese rango de fechas. Propón otro día al cliente."
 
-        tz_arg = timezone(timedelta(hours=-3))
         resultado = "HORARIOS DISPONIBLES (verificados y libres en la agenda real):\n"
         for fecha, slots in sorted(slots_data.items()):
             if slots:
-                horas_gmt3 = []
+                # Cal.com devuelve los tiempos ya en la timeZone solicitada
+                horas = []
                 for s in slots:
                     try:
-                        dt_utc = datetime.fromisoformat(s["time"].replace("Z", "+00:00"))
-                        dt_gmt3 = dt_utc.astimezone(tz_arg)
-                        horas_gmt3.append(dt_gmt3.strftime("%H:%M"))
+                        t = s["time"]  # ej: "2026-03-05T09:00:00-03:00"
+                        hora = t[11:16]  # extrae HH:MM
+                        horas.append(hora)
                     except Exception:
                         pass
-                if horas_gmt3:
-                    resultado += f"- {fecha}: {', '.join(horas_gmt3)} (hora Argentina, GMT-3)\n"
+                if horas:
+                    resultado += f"- {fecha}: {', '.join(horas)} (hora Argentina, GMT-3)\n"
 
         resultado += "\n🚨 REGLA: Ofrécele SOLO 2-3 opciones al cliente. NUNCA listes todos los horarios de un golpe."
         return resultado
@@ -258,7 +259,7 @@ def agendar_cita_calcom(fecha_hora_utc: str, nombre_cliente: str, email_cliente:
             }
         }
         resp = requests.post(
-            f"{calcom_url}/api/v2/bookings",
+            f"{calcom_url}/v2/bookings",
             headers=headers, json=body, timeout=10
         )
         resp.raise_for_status()

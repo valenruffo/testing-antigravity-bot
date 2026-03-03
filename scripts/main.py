@@ -5,6 +5,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from langchain_core.runnables import RunnableConfig
+import requests
 
 # Archivos locales
 from state import AgentState, DatosLead
@@ -83,7 +85,7 @@ workflow = StateGraph(AgentState)
 
 tool_node = ToolNode(TOOLS)
 
-def ejecutar_herramientas(state: AgentState):
+def ejecutar_herramientas(state: AgentState, config: RunnableConfig):
     """
     Nodo que ejecuta la herramienta solicitada por el LLM.
     """
@@ -100,6 +102,15 @@ def ejecutar_herramientas(state: AgentState):
     for tm in tool_messages:
         if isinstance(tm.content, str) and "HITL_TRIGGERED" in tm.content:
             nuevo_estado["esperando_humano"] = True
+            thread_id = config.get("configurable", {}).get("thread_id")
+            if thread_id:
+                try:
+                    url = f"{os.getenv('CHATWOOT_BASE_URL', 'http://chatwoot_rails:3000')}/api/v1/accounts/{os.getenv('CHATWOOT_ACCOUNT_ID', '1')}/conversations/{thread_id}/toggle_status"
+                    headers = {"api_access_token": os.getenv("CHATWOOT_ACCESS_TOKEN")}
+                    requests.post(url, headers=headers, json={"status": "open"})
+                    print(f"✅ Conversación {thread_id} transferida a humano en Chatwoot (status=open)")
+                except Exception as e:
+                    print(f"Error cambiando status en Chatwoot: {e}")
             
     return nuevo_estado
 # Añadimos los nodos

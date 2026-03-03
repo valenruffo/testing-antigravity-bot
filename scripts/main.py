@@ -132,7 +132,7 @@ def ejecutar_herramientas(state: AgentState, config: RunnableConfig):
                     
                     # 2. Apagar el Bot explícitamente usando Custom Attributes
                     payload_attr = {"custom_attributes": {"bot_status": "off"}}
-                    requests.put(base_url, headers=headers, json=payload_attr)
+                    requests.post(f"{base_url}/custom_attributes", headers=headers, json=payload_attr)
                     
                     print(f"✅ Conversación {thread_id} transferida (status=open, bot_status=off)")
                 except Exception as e:

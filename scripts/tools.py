@@ -314,6 +314,31 @@ def transferir_a_humano(motivo_transferencia: str) -> str:
        Args:
            motivo_transferencia: Breve resumen para el humano de por qué estás abandonando el chat.
     """
+    try:
+        smtp_user = os.environ.get('SMTP_USERNAME')
+        smtp_pass = os.environ.get('SMTP_PASSWORD')
+        smtp_host = os.environ.get('SMTP_ADDRESS', 'smtp.gmail.com')
+        smtp_port = int(os.environ.get('SMTP_PORT', 587))
+        
+        if smtp_user and smtp_pass:
+            msg = MIMEMultipart()
+            msg['From'] = smtp_user
+            msg['To'] = smtp_user # Enviamos al mismo admin
+            msg['Subject'] = "🚨 ALERTA: Un Lead requiere Asistencia Humana (Chatwoot)"
+            body = f"El bot ha transferido una conversación.\n\nMotivo que dio la IA: {motivo_transferencia}\n\nIngresa a Chatwoot para continuar la conversación y recuerda volver a encender el bot (bot_status=on) al terminar."
+            msg.attach(MIMEText(body, 'plain'))
+            
+            server = smtplib.SMTP(smtp_host, smtp_port)
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+            server.quit()
+            print("Correo SMTP de Hand-off enviado correctamente.")
+        else:
+            print("No se envió correo por omisión de SMTP_USERNAME/PASSWORD en .env")
+    except Exception as e:
+        print(f"Error mandando SMTP: {e}")
+
     # 1. Retornaremos un payload especial estructurado que `main.py` atrapará para
     # cambiar el AgentState y notificar a Chatwoot.
     return f"HITL_TRIGGERED||{motivo_transferencia}"

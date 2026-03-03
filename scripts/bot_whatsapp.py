@@ -140,7 +140,7 @@ async def procesar_langgraph(thread_id: str, user_text: str):
     """
     Función que inyecta el mensaje al Graph persistente, recupera la respuesta y empuja metadata a Zep.
     """
-    from main import graph, zep_client
+    from main import graph
     config = {"configurable": {"thread_id": thread_id}}
     
     # 1. Recuperar Snapshot guardado en PostgreSQL (Si existe)

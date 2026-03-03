@@ -216,7 +216,7 @@ def obtener_slots_disponibles(fecha_inicio: str, fecha_fin: str) -> str:
                 if horas:
                     resultado += f"- {fecha}: {', '.join(horas)} (hora Argentina, GMT-3)\n"
 
-        resultado += "\n🚨 REGLA: Ofrécele SOLO 2-3 opciones al cliente. NUNCA listes todos los horarios de un golpe."
+        resultado += "\n🚨 REGLA DE PRESENTACIÓN: Ofrecé al cliente solo 2-3 opciones para no abrumarlo. Pero internamente conocés TODA la lista de arriba. Si el cliente pide un horario específico que SÍ está en esa lista, confirmalo. Si pide uno que NO está, avisale que no tenés disponibilidad a esa hora."
         return resultado
     except Exception as e:
         return f"Error consultando disponibilidad en Cal.com: {str(e)}"

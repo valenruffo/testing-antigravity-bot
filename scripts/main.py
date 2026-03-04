@@ -16,7 +16,7 @@ from tools import TOOLS
 # Configuración del LLM
 # Usamos gpt-4o-mini según requerimiento de la directiva (la directiva dice GPT-5-mini pero hoy el equivalente es 4o-mini, o gpt-4o).
 # Ajustar el nombre del modelo según disponibilidad de OpenAI
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
 llm_with_tools = llm.bind_tools(TOOLS)
 
 def format_bot_response(response_text: str) -> list[str]:

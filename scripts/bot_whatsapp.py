@@ -49,17 +49,31 @@ def send_chatwoot_message(conversation_id: str, text: str):
         texto_limpio = text.replace(match.group(0), "").strip()
         texto_formateado = texto_limpio.replace('**', '*')
         
-        # Enviar el texto como mensaje normal
+        # 1. Enviar el texto descriptivo primero
         if len(texto_formateado) > 0:
             requests.post(url, headers=headers, json={"content": texto_formateado, "message_type": "outgoing"})
             
-        # Para enviar adjuntos por API en Chatwoot es más complejo (multipart/form-data o URL si lo soporta el provider)
-        # Por ahora enviamos el link crudo para que WhatsApp lo parsee o lo enviamos como mensaje de texto
-        data = {
-            "content": image_url,
-            "message_type": "outgoing"
-        }
-        response = requests.post(url, headers=headers, json=data)
+        # 2. Descargar la imagen en memoria y enviarla nativamente a Chatwoot
+        response = None
+        try:
+            img_r = requests.get(image_url, timeout=10)
+            if img_r.status_code == 200:
+                headers_multipart = {"api_access_token": CHATWOOT_ACCESS_TOKEN}
+                files = {
+                    'attachments[]': ('propiedad.jpg', img_r.content, 'image/jpeg')
+                }
+                data = {
+                    "content": "", # Texto vacío, solo enviamos la foto
+                    "message_type": "outgoing"
+                }
+                response = requests.post(url, headers=headers_multipart, data=data, files=files)
+            else:
+                # Fallback: si falla la descarga de la imagen, enviamos el link
+                response = requests.post(url, headers=headers, json={"content": f"Ver imagen: {image_url}", "message_type": "outgoing"})
+        except Exception as e:
+            print(f"Error procesando imagen adjunta: {e}")
+            response = requests.post(url, headers=headers, json={"content": f"Ver imagen: {image_url}", "message_type": "outgoing"})
+            
         return response
 
     # 2. FLUJO NORMAL: No hay imagen, se envía como texto puro

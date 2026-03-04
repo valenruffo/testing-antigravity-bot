@@ -61,13 +61,13 @@ Google Calendar del Broker
 - **Retorna:** `https://cal.com/{CALCOM_USERNAME}/asesoria-inmobiliaria`
 
 ### `obtener_slots_disponibles(fecha_inicio_iso, fecha_fin_iso)`
-- **Endpoint:** `GET https://api.cal.com/api/v2/slots/available`
-- **Parámetros:** `eventTypeId`, `startTime` (UTC), `endTime` (UTC)
+- **Endpoint:** `GET https://api.cal.com/v2/slots`
+- **Parámetros:** `eventTypeId`, `start`, `end`, `timeZone`
 - **Retorna:** Lista de horarios libres convertidos a GMT-3
 - **Precaución:** Siempre usar ANTES de `agendar_cita_calcom`
 
 ### `agendar_cita_calcom(fecha_hora_utc, nombre, email, zona_horaria, motivo)`
-- **Endpoint:** `POST https://api.cal.com/api/v2/bookings`
+- **Endpoint:** `POST https://api.cal.com/v2/bookings`
 - **⚠️ CRÍTICO:** `fecha_hora_utc` SIEMPRE en UTC. Si el cliente eligió 09:00 (GMT-3), pasar `T12:00:00Z`.
 - **Retorna:** ID reserva + link videollamada + email de confirmación automático al cliente
 

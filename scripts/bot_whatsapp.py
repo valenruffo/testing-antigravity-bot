@@ -91,7 +91,7 @@ async def handle_chatwoot_webhook(request: Request):
     try:
         body = await request.json()
     except:
-        return JSONResponse(content={"status": "error parsing json"}, status_code=400)
+        return JSONResponse(content={"status": "error al procesar json"}, status_code=400)
     
     try:
         event = body.get("event")

@@ -26,7 +26,7 @@ services:
     depends_on:
       - app
 
-  # --- CHATWOOT SERVICES ---
+  # --- SERVICIOS DE CHATWOOT ---
   base: &base
     image: chatwoot/chatwoot:latest
     env_file: .env
@@ -86,7 +86,7 @@ services:
     volumes:
       - redis_data:/data
 
-  # --- BOT PERSISTENCE (ZEP + POSTGRES) ---
+  # --- PERSISTENCIA DEL BOT (ZEP + POSTGRES) ---
   bot_postgres:
     image: postgres:16
     container_name: bot_postgres

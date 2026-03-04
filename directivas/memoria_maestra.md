@@ -52,3 +52,10 @@
 ### 3.3 Testeo vía SSH (El problema del Escaping)
 - **Nota Operativa:** Ejecutar scripts al vuelo con `python3 -c "import requests, json... "` pasando JSONs complejos con comillas incrustadas a través de `plink.exe` hacia un servidor remoto es muy propenso a fallar por "escaping" de sintaxis (bash traga comillas).
 - **Mejor Práctica:** Escribir el script Python de test localmente (`.tmp/test_api.py`), subirlo completo usando `pscp` (o `docker cp`), y ejecutarlo directamente dentro del contenedor remoto donde están las variables de entorno para evitar frustración.
+
+### 3.4 Chatwoot y el Renderizado de Imágenes en WhatsApp
+- **Problema:** Si el bot necesita enviar una foto (ej. sugerencia de Inmueble desde la BD) y envía un enlace HTTPS crudo (`{"content": "https://...", "message_type": "outgoing"}`), WhatsApp *puede o no* generar un link preview, pero **nunca** la tratará como una foto nativa en la burbuja de chat.
+- **Patrón Exitoso:** Para forzar a Meta/WhatsApp a renderizar la foto como Media Message nativo, el bot intermedio (Python) debe:
+  1. Detectar el markdown `![alt](url)`.
+  2. Hacer un HTTP GET a la URL para descargar el binario a memoria RAM.
+  3. POST a la API de Chatwoot (`/messages`) usando `multipart/form-data` pasando el archivo en `attachments[]` y el contenido de texto vacío. Chatwoot se encarga de retransmitir el media file a Meta.

@@ -208,11 +208,21 @@ def obtener_slots_disponibles(fecha_inicio: str, fecha_fin: str) -> str:
                 horas = []
                 for s in slots:
                     try:
-                        t = s["start"]  # ej: "2026-03-06T09:00:00.000-03:00"
-                        hora = t[11:16]  # extrae HH:MM
+                        t = s.get("start") or s.get("time")
+                        if not t:
+                            continue
+                        # Validar si termina en Z (UTC)
+                        if t.endswith('Z'):
+                            t = t[:-1] + '+00:00'
+                        
+                        dt_obj = datetime.fromisoformat(t)
+                        # Forzar conversión a GMT-3
+                        dt_local = dt_obj.astimezone(timezone(timedelta(hours=-3)))
+                        hora = dt_local.strftime("%H:%M")
+                        
                         horas.append(hora)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Error parseando hora slot: {e}")
                 if horas:
                     resultado += f"- {fecha}: {', '.join(horas)} (hora Argentina, GMT-3)\n"
 

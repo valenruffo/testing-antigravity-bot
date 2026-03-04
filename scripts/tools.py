@@ -226,7 +226,7 @@ def obtener_slots_disponibles(fecha_inicio: str, fecha_fin: str) -> str:
                 if horas:
                     resultado += f"- {fecha}: {', '.join(horas)} (hora Argentina, GMT-3)\n"
 
-        resultado += "\n🚨 REGLA DE PRESENTACIÓN: El cliente ya te indicó si prefiere mañana o tarde. Filtra mentalmente esta lista y ofrécele solo 2 o 3 opciones. NO le muestres toda la lista. IMPORTANTE: Si el cliente luego te pide un horario específico (ej: las 12) y ESE HORARIO ESTÁ EN LA LISTA, dile que SÍ de forma inmediata y avanza, sin importar si consideras que las 12 es 'mañana' o 'tarde'."
+        resultado += "\n🚨 REGLA DE PRESENTACIÓN: El cliente ya te indicó si prefiere mañana o tarde. Filtra mentalmente esta lista y ofrécele TODOS los horarios disponibles de ese turno en forma clara. IMPORTANTE: Tu meta es vender; si el cliente te pide un horario específico (ej: las 12) y ESE HORARIO ESTÁ EN LA LISTA, dile que SÍ de forma inmediata y avanza con el inicio de la cita, sin importar si consideras que las 12 es 'mañana' o 'tarde'."
         return resultado
     except Exception as e:
         return f"Error consultando disponibilidad en Cal.com: {str(e)}"

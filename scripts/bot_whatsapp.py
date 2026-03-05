@@ -66,10 +66,12 @@ async def monitorear_ventana_24hs():
                                     "private": True
                                 }
                                 try:
-                                    await asyncio.to_thread(requests.post, url, headers=headers, json=data, timeout=5)
+                                    response = await asyncio.to_thread(requests.post, url, headers=headers, json=data, timeout=5)
+                                    print(f"Respuesta Chatwoot: {response.status_code} - {response.text}")
+                                    response.raise_for_status()
                                     alertas_enviadas.add(conv_id)
                                 except Exception as e:
-                                    print(f"Error enviando nota de alerta 24hs: {e}")
+                                    print(f"Error enviando nota de alerta 24hs a Chatwoot: {e}")
                                     
                         elif horas < 23.0 and conv_id in alertas_enviadas:
                             alertas_enviadas.discard(conv_id) # Reset si el cliente volvió a hablar

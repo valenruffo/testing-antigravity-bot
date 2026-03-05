@@ -27,7 +27,7 @@ app = FastAPI(title="Chatwoot Agent Webhook")
 # Memoria delegada completamente a Postgres Checkpointer
 # MEMORY_STORAGE = {}
 
-CHATWOOT_DB_URL = os.getenv("CHATWOOT_DB_URL", "postgresql://postgres:chatwoot_db_pass_1234@chatwoot_postgres:5432/chatwoot")
+CHATWOOT_DB_URL = os.getenv("CHATWOOT_DB_URL", "postgresql://postgres:chatwoot_db_pass_1234@chatwoot_postgres:5432/chatwoot_production")
 
 async def monitorear_ventana_24hs():
     """Se ejecuta en background monitoreando last_incoming_at para alertar a las 23 hs."""

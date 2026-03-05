@@ -63,6 +63,8 @@
 ### 3.5 Ventana de Sesión de 24hs (WhatsApp Cloud API)
 - **Problema Crítico:** WhatsApp cierra la "Ventana de Sesión" exactamente a las 24 horas del último mensaje entrante del cliente (`last_incoming_at`). Si el Agente LangGraph o un humano intenta mandar un mensaje de texto plano luego del cierre, la API de Meta denegará el envío, afectando los scores de calidad.
 - **Solución Definitiva (SOP):** 
-  1. El sistema Node/Python debe monitorear periódicamente la base de datos `chatwoot_postgres` consultando los últimos `last_incoming_at`.
-  2. A las **23 horas** del último mensaje, debe inyectarse una **Private Note** (`{"private": true}`) en Chatwoot (para consumo visual del humano), notificando preventivamente que el agente pasará a modo inactivo y será necesario usar Plantilla (Message Template).
-  3. A partir de las **24 horas**, el Bot tiene estrictamente prohibido emitir llamadas salientes. Debe abortar su ejecución de LangGraph con un Guardrail explícito logueado en consola.
+  1. El sistema Node/Python debe monitorear periódicamente la base de datos `chatwoot_postgres` consultando los últimos `last_incoming_at`. **Nota de BD:** Chatwoot crea sus tablas en `chatwoot_production`, no en la base por defecto `chatwoot`.
+  2. A las **23 horas** del último mensaje, debe inyectarse una **Private Note** (`{"private": true}`) en Chatwoot (para consumo visual del humano), notificando preventivamente que el agente pasará a modo inactivo.
+  3. **Lógica Retroactiva (>= 23h):** El chequeo de horas DEBE ser `horas >= 23.0`, NO un rango `23 <= horas < 24`. Si el bot estuvo apagado y se enciende con mensajes de hace 3 días, la alerta retroactiva debe saltar igual.
+  4. **Fallo Silencioso por Race Condition:** Al desplegar contenedores simultáneos, el bot (FastAPI) levanta en 1 seg, pero Chatwoot (Rails) tarda ~40 seg. Si el bot intenta mandar la Private Note inmediatamente al arranque, Cloudflare devolverá un `502 Bad Gateway` silencioso. La petición HTTP de envío de nota DEBE tener manejo estricto de errores (`response.raise_for_status()`) para reintentar más tarde.
+  5. A partir de las **24 horas**, el Bot tiene estrictamente prohibido emitir llamadas salientes. Debe abortar su ejecución de LangGraph con un Guardrail explícito logueado en consola.

@@ -40,7 +40,6 @@ async def monitorear_ventana_24hs():
                         SELECT conversation_id AS id, account_id, MAX(created_at) AS last_incoming_at
                         FROM messages
                         WHERE message_type = 0
-                        AND created_at >= NOW() - INTERVAL '25 hours'
                         GROUP BY conversation_id, account_id
                     """
                     await cur.execute(query)
@@ -56,7 +55,7 @@ async def monitorear_ventana_24hs():
                             
                         horas = (ahora - last_in).total_seconds() / 3600.0
                         
-                        if 23.0 <= horas < 24.0:
+                        if horas >= 23.0:
                             if conv_id not in alertas_enviadas:
                                 print(f"⚠️ Alerta 23h: Ventana por expirar para conv {conv_id}. Enviando Private Note.")
                                 url = f"{CHATWOOT_BASE_URL}/api/v1/accounts/{account_id}/conversations/{conv_id}/messages"

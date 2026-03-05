@@ -3,7 +3,11 @@ import asyncio
 import random
 import requests
 import re
+from datetime import datetime, timezone
 from dotenv import load_dotenv
+
+import psycopg
+from psycopg.rows import dict_row
 
 from fastapi import FastAPI, Request, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -23,11 +27,94 @@ app = FastAPI(title="Chatwoot Agent Webhook")
 # Memoria delegada completamente a Postgres Checkpointer
 # MEMORY_STORAGE = {}
 
+CHATWOOT_DB_URL = os.getenv("CHATWOOT_DB_URL", "postgresql://postgres:chatwoot_db_pass_1234@chatwoot_postgres:5432/chatwoot")
+
+async def monitorear_ventana_24hs():
+    """Se ejecuta en background monitoreando last_incoming_at para alertar a las 23 hs."""
+    alertas_enviadas = set() # Mantiene registro de {conversation_id} para no repetir
+    while True:
+        try:
+            async with await psycopg.AsyncConnection.connect(CHATWOOT_DB_URL) as conn:
+                async with conn.cursor(row_factory=dict_row) as cur:
+                    query = """
+                        SELECT conversation_id AS id, account_id, MAX(created_at) AS last_incoming_at
+                        FROM messages
+                        WHERE message_type = 0
+                        AND created_at >= NOW() - INTERVAL '25 hours'
+                        GROUP BY conversation_id, account_id
+                    """
+                    await cur.execute(query)
+                    conversaciones = await cur.fetchall()
+                    
+                    ahora = datetime.now(timezone.utc)
+                    for row in conversaciones:
+                        conv_id = row["id"]
+                        account_id = row["account_id"]
+                        last_in = row["last_incoming_at"]
+                        if last_in.tzinfo is None:
+                            last_in = last_in.replace(tzinfo=timezone.utc)
+                            
+                        horas = (ahora - last_in).total_seconds() / 3600.0
+                        
+                        if 23.0 <= horas < 24.0:
+                            if conv_id not in alertas_enviadas:
+                                print(f"⚠️ Alerta 23h: Ventana por expirar para conv {conv_id}. Enviando Private Note.")
+                                url = f"{CHATWOOT_BASE_URL}/api/v1/accounts/{account_id}/conversations/{conv_id}/messages"
+                                headers = {"api_access_token": CHATWOOT_ACCESS_TOKEN, "Content-Type": "application/json"}
+                                data = {
+                                    "content": "⚠️ La ventana de 24hs de WhatsApp está por expirar. El Bot pasará a modo inactivo. Usá una plantilla paga para continuar la conversacion o espera la respuesta.",
+                                    "message_type": "outgoing",
+                                    "private": True
+                                }
+                                try:
+                                    await asyncio.to_thread(requests.post, url, headers=headers, json=data, timeout=5)
+                                    alertas_enviadas.add(conv_id)
+                                except Exception as e:
+                                    print(f"Error enviando nota de alerta 24hs: {e}")
+                                    
+                        elif horas < 23.0 and conv_id in alertas_enviadas:
+                            alertas_enviadas.discard(conv_id) # Reset si el cliente volvió a hablar
+        except Exception as e:
+            print(f"Error en el monitoreo de 24hs (DB Chatwoot): {e}")
+        
+        await asyncio.sleep(60)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(monitorear_ventana_24hs())
+
+def check_24h_guardrail(conversation_id: str) -> bool:
+    """Devuelve True si han pasado MÁS de 24 hs desde el último mensaje entrante, impidiendo el envío."""
+    try:
+        with psycopg.connect(CHATWOOT_DB_URL) as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                cur.execute(
+                    "SELECT MAX(created_at) as last_incoming_at FROM messages WHERE conversation_id = %s AND message_type = 0", 
+                    (int(conversation_id),)
+                )
+                row = cur.fetchone()
+                if row and row["last_incoming_at"]:
+                    last_in = row["last_incoming_at"]
+                    if last_in.tzinfo is None:
+                        last_in = last_in.replace(tzinfo=timezone.utc)
+                    horas = (datetime.now(timezone.utc) - last_in).total_seconds() / 3600.0
+                    if horas >= 24.0:
+                        return True
+        return False
+    except Exception as e:
+        print(f"Guardrail check failed: {e}")
+        return False
+
 def send_chatwoot_message(conversation_id: str, text: str):
     """Envía un texto (o imagen) a la conversación en Chatwoot, quien lo retransmitirá al cliente"""
     if not CHATWOOT_ACCESS_TOKEN:
         print("ERROR: Falta CHATWOOT_ACCESS_TOKEN en .env")
         return
+
+    # GUARDRAIL 24H: Evitar enviar mensajes a WhatsApp si el límite expiró
+    if check_24h_guardrail(conversation_id):
+        print(f"🛑 BLOQUEO DE SEGURIDAD: La ventana de 24hs ha expirado para la conversación {conversation_id}. Mensaje descartado.")
+        return None
 
     url = f"{CHATWOOT_BASE_URL}/api/v1/accounts/{CHATWOOT_ACCOUNT_ID}/conversations/{conversation_id}/messages"
     headers = {

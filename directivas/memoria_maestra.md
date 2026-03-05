@@ -59,3 +59,10 @@
   1. Detectar el markdown `![alt](url)`.
   2. Hacer un HTTP GET a la URL para descargar el binario a memoria RAM.
   3. POST a la API de Chatwoot (`/messages`) usando `multipart/form-data` pasando el archivo en `attachments[]` y el contenido de texto vacío. Chatwoot se encarga de retransmitir el media file a Meta.
+
+### 3.5 Ventana de Sesión de 24hs (WhatsApp Cloud API)
+- **Problema Crítico:** WhatsApp cierra la "Ventana de Sesión" exactamente a las 24 horas del último mensaje entrante del cliente (`last_incoming_at`). Si el Agente LangGraph o un humano intenta mandar un mensaje de texto plano luego del cierre, la API de Meta denegará el envío, afectando los scores de calidad.
+- **Solución Definitiva (SOP):** 
+  1. El sistema Node/Python debe monitorear periódicamente la base de datos `chatwoot_postgres` consultando los últimos `last_incoming_at`.
+  2. A las **23 horas** del último mensaje, debe inyectarse una **Private Note** (`{"private": true}`) en Chatwoot (para consumo visual del humano), notificando preventivamente que el agente pasará a modo inactivo y será necesario usar Plantilla (Message Template).
+  3. A partir de las **24 horas**, el Bot tiene estrictamente prohibido emitir llamadas salientes. Debe abortar su ejecución de LangGraph con un Guardrail explícito logueado en consola.
